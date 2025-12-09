@@ -1,0 +1,40 @@
+name: Windows Build Release
+
+on:
+  push:
+    branches: [ "main", "master" ] # main veya master branch'ine kod atınca çalışır
+  workflow_dispatch: # GitHub sitesinden manuel butonla da tetikleyebilmek için
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: stable
+        architecture: x64
+
+    - name: Enable Windows Support & Create Runner
+      run: |
+        flutter config --enable-windows-desktop
+        flutter create . 
+      # "flutter create ." komutu, eğer projenizde windows klasörü eksikse onu oluşturur.
+
+    - name: Get Dependencies
+      run: flutter pub get
+
+    - name: Build Windows EXE
+      run: flutter build windows --release
+
+    - name: Upload Artifact (EXE İndirilebilir Yap)
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-app-release
+        path: build/windows/x64/runner/Release
+        # Eğer eski flutter sürümü kullanıyorsan yol: build/windows/runner/Release olabilir.
+        # Ama yeni sürümlerde x64 klasörü araya giriyor.
