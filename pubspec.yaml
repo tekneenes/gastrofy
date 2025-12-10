@@ -67,6 +67,7 @@ flutter:
     - assets/fonts/Roboto-BoldItalic.ttf
     - assets/splash_video.mp4
     - .env
+    - assets/logo3.png
    #- assets/embeddinggemma-300M_seq1024_mixed-precision.tflite
    #- assets/sentencepiece.model
    
@@ -74,4 +75,7 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/logo.png"
+  image_path: "assets/logo3.png"
+  windows: true # <-- Sadece bu satırı eklemen yeterli
+  macos: true
+  linux: true
