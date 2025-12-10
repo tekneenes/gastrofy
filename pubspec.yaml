@@ -54,8 +54,16 @@ dependency_overrides:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_launcher_icons: ^0.12.0
-
+  flutter_launcher_icons: ^0.14.4
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/logo3.png"
+  # Windows için true yerine alt satıra geçip detay veriyoruz:
+  windows:
+    generate: true
+    image_path: "assets/logo3.png"
+    icon_size: 256 # Windows ikon kalitesi için önerilir
 flutter:
   uses-material-design: true
   assets:
@@ -72,10 +80,3 @@ flutter:
    #- assets/sentencepiece.model
    
 # Bu bölüm doğru ve değiştirilmedi
-flutter_launcher_icons:
-  android: true
-  ios: true
-  image_path: "assets/logo3.png"
-  windows: true # <-- Sadece bu satırı eklemen yeterli
-  macos: true
-  linux: true
