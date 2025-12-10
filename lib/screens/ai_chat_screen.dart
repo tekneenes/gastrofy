@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_gemini/flutter_gemini.dart';
-import 'package:flutter_tts/flutter_tts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/table_ai_service.dart';
@@ -26,20 +25,14 @@ class _AIChatScreenState extends State<AIChatScreen>
   late AnimationController _thinkingAnimController;
   late Animation<double> _thinkingAnimation;
 
-  late FlutterTts _flutterTts;
-  bool _isTtsInitialized = false;
-  bool _isAutoPlayEnabled = false;
-
   String? _geminiApiKey;
   bool _isApiKeyChecking = true;
   final TextEditingController _apiKeyController = TextEditingController();
-  // YENİ: Hata mesajını dialog yerine ekranda göstermek için değişken
   String? _apiKeyError;
 
   @override
   void initState() {
     super.initState();
-    _initTts();
 
     _thinkingAnimController = AnimationController(
       vsync: this,
@@ -64,23 +57,19 @@ class _AIChatScreenState extends State<AIChatScreen>
     final prefs = await SharedPreferences.getInstance();
     final apiKey = prefs.getString('gemini_api_key');
 
-    // Dialog açmak yerine sadece state'i güncelliyoruz.
-    // Eğer key yoksa UI otomatik olarak Gömülü Form'a dönecek.
     if (apiKey != null && apiKey.isNotEmpty) {
       _initializeServices(apiKey);
     }
 
-    setState(() => _isApiKeyChecking = false);
+    if (mounted) {
+      setState(() => _isApiKeyChecking = false);
+    }
   }
 
   void _initializeServices(String apiKey) {
     try {
-      Gemini.init(apiKey: apiKey); // Paketi başlatır
-
-      // --- DÜZELTME BAŞLANGICI ---
-      // Servis sınıfına anahtarı manuel olarak gönderiyoruz:
+      Gemini.init(apiKey: apiKey);
       _aiService.setApiKey(apiKey);
-      // --- DÜZELTME BİTİŞİ ---
 
       setState(() {
         _geminiApiKey = apiKey;
@@ -95,12 +84,10 @@ class _AIChatScreenState extends State<AIChatScreen>
     }
   }
 
-  // Anahtarı sıfırlamak için yardımcı metod (Formu tekrar göstermek için)
   Future<void> _resetApiKey() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('gemini_api_key');
 
-    // Servis içindeki anahtarı da temizle
     _aiService.setApiKey('');
 
     setState(() {
@@ -133,92 +120,16 @@ class _AIChatScreenState extends State<AIChatScreen>
     }
   }
 
-  void _initTts() async {
-    _flutterTts = FlutterTts();
-    _flutterTts.awaitSpeakCompletion(true);
-    _flutterTts.setSpeechRate(0.45);
-    _flutterTts.setVolume(1.0);
-    _flutterTts.setPitch(1.0);
-
-    List<dynamic> voices;
-    try {
-      voices = await _flutterTts.getVoices;
-    } catch (e) {
-      debugPrint("Sesleri alırken hata oluştu: $e");
-      voices = [];
-    }
-
-    final turkishVoices = voices
-        .where((voice) =>
-            voice['locale'] != null &&
-            voice['locale'].toLowerCase().contains('tr'))
-        .toList();
-
-    Map<String, String>? selectedVoice;
-
-    if (turkishVoices.isNotEmpty) {
-      final networkVoice = turkishVoices.firstWhere(
-        (voice) =>
-            voice['name'] != null &&
-            voice['name'].toLowerCase().contains('network'),
-        orElse: () => null,
-      );
-      final highQualityVoice = turkishVoices.firstWhere(
-        (voice) =>
-            voice['name'] != null &&
-            voice['name'].toLowerCase().contains('high'),
-        orElse: () => null,
-      );
-
-      if (networkVoice != null) {
-        selectedVoice = {
-          "name": networkVoice['name'],
-          "locale": networkVoice['locale']
-        };
-      } else if (highQualityVoice != null) {
-        selectedVoice = {
-          "name": highQualityVoice['name'],
-          "locale": highQualityVoice['locale']
-        };
-      } else {
-        selectedVoice = {
-          "name": turkishVoices[0]['name'],
-          "locale": turkishVoices[0]['locale']
-        };
-      }
-    }
-
-    if (selectedVoice != null) {
-      await _flutterTts.setVoice(selectedVoice);
-    } else {
-      debugPrint("Özel Türkçe ses bulunamadı. Dil 'tr-TR' olarak ayarlanıyor.");
-      await _flutterTts.setLanguage("tr-TR");
-    }
-
-    if (mounted) {
-      setState(() => _isTtsInitialized = true);
-    }
-  }
-
-  Future<void> _speak(String text) async {
-    if (_isTtsInitialized && text.isNotEmpty) {
-      await _flutterTts.stop();
-      await _flutterTts.speak(text);
-    }
-  }
-
   @override
   void dispose() {
     _thinkingAnimController.dispose();
     _scrollController.dispose();
     _controller.dispose();
     _apiKeyController.dispose();
-    _flutterTts.stop();
     super.dispose();
   }
 
   void _sendMessage() async {
-    // Eğer key yoksa işlem yapma (Zaten UI bu durumu engelliyor ama güvenlik için)
     if (_geminiApiKey == null || _geminiApiKey!.isEmpty) {
       return;
     }
@@ -243,9 +154,10 @@ class _AIChatScreenState extends State<AIChatScreen>
 
     try {
       await Future.delayed(const Duration(milliseconds: 800));
-      setState(() => _thinkingPhase = 'Veritabanı sorgulanıyor...');
+      if (mounted)
+        setState(() => _thinkingPhase = 'Veritabanı sorgulanıyor...');
       await Future.delayed(const Duration(milliseconds: 600));
-      setState(() => _thinkingPhase = 'Yanıt oluşturuluyor...');
+      if (mounted) setState(() => _thinkingPhase = 'Yanıt oluşturuluyor...');
 
       final responseText =
           await _aiService.getGeminiResponseWithRAG(text, _chatHistory);
@@ -260,39 +172,39 @@ class _AIChatScreenState extends State<AIChatScreen>
       final geminiResponseContent =
           Content(role: 'model', parts: [Part.text(responseText)]);
 
-      setState(() {
-        _chatHistory.add(Content(role: 'user', parts: [Part.text(text)]));
-        _chatHistory.add(geminiResponseContent);
-        _displayMessages.add(assistantMessage);
-        _isLoading = false;
-        _thinkingPhase = '';
-      });
-
-      _scrollToBottom();
-
-      if (_isAutoPlayEnabled && _isTtsInitialized) {
-        _speak(responseText);
-      }
-
-      _animateMessageText(assistantMessage);
-    } catch (e) {
-      String errorMessage = e.toString();
-      // Eğer API Key hatası alırsak, key'i sıfırlayıp gömülü formu tekrar gösterelim
-      if (e.toString().toLowerCase().contains('api key not valid') ||
-          e.toString().contains('Invalid API Key')) {
-        _resetApiKey(); // Bu işlem otomatik olarak gömülü formu getirecek
-        setState(
-            () => _apiKeyError = "API Anahtarı geçersiz. Lütfen tekrar girin.");
-      } else {
+      if (mounted) {
         setState(() {
-          _displayMessages.add(ChatMessage(
-            role: 'system',
-            text: '❌ Bir hata oluştu: $errorMessage',
-            timestamp: DateTime.now(),
-          ));
+          _chatHistory.add(Content(role: 'user', parts: [Part.text(text)]));
+          _chatHistory.add(geminiResponseContent);
+          _displayMessages.add(assistantMessage);
           _isLoading = false;
           _thinkingPhase = '';
         });
+      }
+
+      _scrollToBottom();
+      _animateMessageText(assistantMessage);
+    } catch (e) {
+      String errorMessage = e.toString();
+      if (e.toString().toLowerCase().contains('api key not valid') ||
+          e.toString().contains('Invalid API Key')) {
+        _resetApiKey();
+        if (mounted) {
+          setState(() =>
+              _apiKeyError = "API Anahtarı geçersiz. Lütfen tekrar girin.");
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _displayMessages.add(ChatMessage(
+              role: 'system',
+              text: '❌ Bir hata oluştu: $errorMessage',
+              timestamp: DateTime.now(),
+            ));
+            _isLoading = false;
+            _thinkingPhase = '';
+          });
+        }
         _scrollToBottom();
       }
     }
@@ -309,10 +221,12 @@ class _AIChatScreenState extends State<AIChatScreen>
         if (i % 10 == 0) _scrollToBottom();
       }
     }
-    setState(() {
-      message.isAnimating = false;
-      message.displayedText = fullText;
-    });
+    if (mounted) {
+      setState(() {
+        message.isAnimating = false;
+        message.displayedText = fullText;
+      });
+    }
   }
 
   void _scrollToBottom() {
@@ -327,7 +241,6 @@ class _AIChatScreenState extends State<AIChatScreen>
     }
   }
 
-  // --- YENİ GÖMÜLÜ EKRAN TASARIMI ---
   Widget _buildApiKeyPlaceholder() {
     return Center(
       child: SingleChildScrollView(
@@ -363,8 +276,6 @@ class _AIChatScreenState extends State<AIChatScreen>
               style: TextStyle(fontSize: 15, color: Colors.black54),
             ),
             const SizedBox(height: 32),
-
-            // Hata mesajı varsa göster
             if (_apiKeyError != null)
               Container(
                 margin: const EdgeInsets.only(bottom: 16),
@@ -388,7 +299,6 @@ class _AIChatScreenState extends State<AIChatScreen>
                   ],
                 ),
               ),
-
             TextField(
               controller: _apiKeyController,
               decoration: InputDecoration(
@@ -488,7 +398,6 @@ class _AIChatScreenState extends State<AIChatScreen>
       );
     }
 
-    // ANA MANTIK: Key varsa Chat UI, yoksa Gömülü Form
     final bool hasApiKey = _geminiApiKey != null && _geminiApiKey!.isNotEmpty;
 
     return Scaffold(
@@ -535,36 +444,7 @@ class _AIChatScreenState extends State<AIChatScreen>
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-          // Eğer API Key varsa normal butonları göster
           if (hasApiKey) ...[
-            IconButton(
-              icon: Icon(
-                _isAutoPlayEnabled
-                    ? Icons.volume_up_rounded
-                    : Icons.volume_off_rounded,
-                size: 26,
-                color: _isTtsInitialized ? Colors.white : Colors.white38,
-              ),
-              onPressed: _isTtsInitialized
-                  ? () {
-                      setState(() {
-                        _isAutoPlayEnabled = !_isAutoPlayEnabled;
-                      });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(_isAutoPlayEnabled
-                              ? 'Otomatik seslendirme açıldı.'
-                              : 'Otomatik seslendirme kapandı.'),
-                          backgroundColor: Colors.teal,
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                    }
-                  : null,
-              tooltip: _isTtsInitialized
-                  ? 'Otomatik Seslendirme'
-                  : 'Ses motoru yükleniyor...',
-            ),
             IconButton(
               icon: const Icon(Icons.refresh_rounded, size: 26),
               onPressed: () {
@@ -581,7 +461,6 @@ class _AIChatScreenState extends State<AIChatScreen>
               },
               tooltip: 'Sohbeti Sıfırla',
             ),
-            // Anahtarı değiştirme/sıfırlama menüsü
             PopupMenuButton<String>(
               icon: const Icon(Icons.vpn_key, color: Colors.white),
               onSelected: (value) {
@@ -640,7 +519,7 @@ class _AIChatScreenState extends State<AIChatScreen>
                 _buildInputArea(),
               ],
             )
-          : _buildApiKeyPlaceholder(), // KEY YOKSA GÖMÜLÜ EKRAN DEVREYE GİRER
+          : _buildApiKeyPlaceholder(),
     );
   }
 
@@ -845,40 +724,6 @@ class _AIChatScreenState extends State<AIChatScreen>
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                    if (!isUser &&
-                        !message.isAnimating &&
-                        _isTtsInitialized) ...[
-                      const SizedBox(height: 8),
-                      GestureDetector(
-                        onTap: () {
-                          _speak(message.text);
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                              color: Colors.teal.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: Colors.teal.shade100)),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.play_arrow_rounded,
-                                  color: Colors.teal.shade700, size: 18),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Seslendir',
-                                style: TextStyle(
-                                  color: Colors.teal.shade800,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
                     if (!message.isAnimating) ...[
                       const SizedBox(height: 6),
                       Text(
