@@ -1,9 +1,12 @@
+import 'dart:io'; // Platform kontrolü için eklendi (Windows mu değil mi?)
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart'; // Durum yönetimi için
-import 'package:shared_preferences/shared_preferences.dart'; // SharedPreferences için
-import 'package:showcaseview/showcaseview.dart'; // ShowCaseWidget için
-import 'package:intl/date_symbol_data_local.dart'; // Tarih formatlama için
-import 'package:flutter_gemini/flutter_gemini.dart'; // Gemini paketi
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:showcaseview/showcaseview.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:flutter_gemini/flutter_gemini.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 // Uygulamanızın diğer import'ları
 import 'screens/splash_screen.dart';
 import 'services/database_helper.dart';
@@ -11,28 +14,35 @@ import 'providers/table_provider.dart';
 import 'providers/product_provider.dart';
 import 'providers/daily_revenue_provider.dart';
 
-// lib/main.dart (ana uygulama dosyası)
-
-// ⚠️ DİKKAT: BURAYI KENDİ GERÇEK GEMINI API ANAHTARINIZLA DEĞİŞTİRİN!
-// Bu anahtar şuan sadece bir placeholder'dır ve çalışmayacaktır.
-const String GEMINI_API_KEY = "***REMOVED***";
-
+// ⚠️ API Anahtarınız
+const String GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_HERE";
 void main() async {
-  // 1. Flutter binding'i başlatılıyor (asenkron işlemler için zorunlu)
+  // 1. Flutter motorunu hazırla
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 2. GEMINI'YI BAŞLAT (LateInitializationError'ı çözen adım)
-  // Diğer kısımlar kullanmadan önce statik instance'ı hazırlar.
-  Gemini.init(
-    apiKey: GEMINI_API_KEY,
-    // Diğer isteğe bağlı ayarları buraya ekleyebilirsiniz (örneğin caching)
-  );
+  // --- WINDOWS İÇİN EKLENEN KRİTİK BÖLÜM BAŞLANGICI ---
+  // Bu blok olmazsa uygulama veritabanına bağlanmaya çalışırken sonsuz döngüde bekler.
+  if (Platform.isWindows || Platform.isLinux) {
+    // Masaüstü veritabanı motorunu başlat
+    sqfliteFfiInit();
+    // Veritabanı fabrikasını FFI olarak ayarla
+    databaseFactory = databaseFactoryFfi;
+  }
+  // --- WINDOWS İÇİN EKLENEN KRİTİK BÖLÜM BİTİŞİ ---
 
-  // 3. Tarih formatlamayı Türkçe ('tr_TR') için başlat
+  // 2. Gemini'yi başlat
+  Gemini.init(apiKey: GEMINI_API_KEY);
+
+  // 3. Tarih formatını ayarla
   await initializeDateFormatting('tr_TR', null);
 
-  // 4. Veritabanını başlat
-  await DatabaseHelper.instance.database;
+  // 4. Veritabanını başlat (Try-Catch ile güvenli hale getirildi)
+  try {
+    await DatabaseHelper.instance.database;
+  } catch (e) {
+    debugPrint("Veritabanı başlatma hatası: $e");
+    // Hata olsa bile uygulama açılsın diye akışı kesmiyoruz
+  }
 
   // 5. Uygulamayı başlat
   runApp(
@@ -52,18 +62,14 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // MaterialApp'ı ShowCaseWidget ile sarıyoruz.
-    // Provider yapınız bozulmadan çalışmaya devam edecek.
     return ShowCaseWidget(
-      // Eğitim bittiğinde (veya kullanıcı atladığında) bu fonksiyon çalışır.
       onFinish: () async {
-        // SharedPreferences'e erişip 'seen_main_tutorial' anahtarını true yap
         final prefs = await SharedPreferences.getInstance();
         prefs.setBool('seen_main_tutorial', true);
       },
       builder: (context) => MaterialApp(
         title: 'Masa Takip Uygulaması',
-        debugShowCheckedModeBanner: false, // Debug bandını kaldırır
+        debugShowCheckedModeBanner: false,
         theme: ThemeData(
           primarySwatch: Colors.blueGrey,
           visualDensity: VisualDensity.adaptivePlatformDensity,

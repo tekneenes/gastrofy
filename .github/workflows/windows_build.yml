@@ -25,11 +25,11 @@ jobs:
     - name: Install Dependencies
       run: flutter pub get
 
-    - name: Build Windows Debug
-      run: flutter build windows --debug
+    - name: Build Windows Release
+      run: flutter build windows --release
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: windows-app-debug
-        path: build/windows/x64/runner/Debug/
+        name: windows-app-release
+        path: build/windows/x64/runner/Release/

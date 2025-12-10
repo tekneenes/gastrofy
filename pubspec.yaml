@@ -45,7 +45,7 @@ dependencies:
   flutter_gemini: ^3.0.0
   pub_semver: ^2.2.0
   package_info_plus: ^9.0.0
-
+  sqflite_common_ffi: ^2.3.3
 dependency_overrides:
   image: ^4.0.17
   #camera_avfoundation: 0.9.15+1
