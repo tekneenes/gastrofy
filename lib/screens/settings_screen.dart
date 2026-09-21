@@ -1148,6 +1148,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   subtitle: 'Geliştirici ekibimize mesaj gönderin',
                   onTap: _showSupportDialog,
                 ),
+                _buildSettingsTile(
+                  icon: Icons.school_rounded,
+                  color: Colors.indigo.shade600,
+                  title: 'Uygulama Rehberini (Eğitimi) Sıfırla',
+                  subtitle: 'Tanıtım turunu ana sayfada yeniden göster',
+                  onTap: () async {
+                    try {
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setBool('seen_main_tutorial', false);
+                      if (mounted) {
+                        _showSnackBar('Eğitim turu sıfırlandı. Ana sayfaya döndüğünüzde tekrar gösterilecektir.');
+                      }
+                    } catch (e) {
+                      if (mounted) _showSnackBar('Hata: $e', isSuccess: false);
+                    }
+                  },
+                ),
               ],
             ),
             const SizedBox(height: 16),
