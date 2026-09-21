@@ -2,8 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>NSCameraUsageDescription</key>
-	<string>Cihazları eşleştirmek ve QR okutmak için kamera erişimine ihtiyacımız var.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
@@ -46,6 +44,42 @@
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+
+	<!-- Kamera & QR Kod İzinleri -->
+	<key>NSCameraUsageDescription</key>
+	<string>Masa QR kodlarını okutmak, personel cihazlarını eşleştirmek ve menü ürün fotoğrafları çekmek için kamera erişimi gereklidir.</string>
+
+	<!-- Fotoğraf Galerisi İzinleri -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Menü ürünlerine ve işletme profiline görsel yükleyebilmek için fotoğraf galerinize erişim gereklidir.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Oluşturulan satış raporlarını, makbuzları ve QR kod görsellerini galerinize kaydedebilmek için izin gereklidir.</string>
+
+	<!-- Mikrofon İzni -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Video veya medya kaydı sırasında ses alabilmek için mikrofon erişimi gereklidir.</string>
+
+	<!-- Yerel Ağ ve Wi-Fi Senkronizasyon İzinleri -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Kasa ve garson cihazları arasında yerel Wi-Fi ağı üzerinden anlık masa ve sipariş senkronizasyonu sağlamak için yerel ağ izni gereklidir.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Yerel Wi-Fi ağ bağlantısını tespit etmek ve cihazlar arası senkronizasyon ağını doğrulamak için konum izni gereklidir.</string>
+
+	<!-- PDF Raporları ve Dosya Paylaşımı -->
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+
+	<!-- Dış Bağlantı ve İletişim Şemaları -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>https</string>
+		<string>http</string>
+		<string>tel</string>
+		<string>mailto</string>
+		<string>whatsapp</string>
 	</array>
 </dict>
 </plist>
