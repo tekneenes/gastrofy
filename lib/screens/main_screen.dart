@@ -426,8 +426,16 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
 
 
   void _startTutorial(List<PageDefinition> currentPages) async {
-    if (mounted) {
-      _showTutorialWelcomeDialog(currentPages);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final bool seen = prefs.getBool('seen_main_tutorial') ?? false;
+      if (seen) return;
+
+      if (mounted) {
+        _showTutorialWelcomeDialog(currentPages);
+      }
+    } catch (e) {
+      debugPrint('Tutorial check error: $e');
     }
   }
 
@@ -461,15 +469,25 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () async {
+              Navigator.pop(context);
+              try {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('seen_main_tutorial', true);
+              } catch (_) {}
+            },
             child: Text(
               'Eğitimi Atla',
               style: TextStyle(color: Colors.grey.shade600),
             ),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
+              try {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('seen_main_tutorial', true);
+              } catch (_) {}
               _executeShowcase(currentPages);
             },
             style: ElevatedButton.styleFrom(
