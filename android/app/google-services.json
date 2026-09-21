@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "329038116855",
+    "project_id": "gastromind-144a9",
+    "storage_bucket": "gastromind-144a9.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:329038116855:android:0e884495b58d5dd75060f2",
+        "android_client_info": {
+          "package_name": "com.gastromind.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAoj_G-sdMmT9iRrVOGDKND8sc9J5ntgB4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

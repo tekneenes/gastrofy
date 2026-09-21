@@ -16,7 +16,13 @@ import 'package:uuid/uuid.dart';
 
 class TableDetailScreen extends StatefulWidget {
   final String tableId;
-  const TableDetailScreen({super.key, required this.tableId});
+  final Map<String, dynamic>? loggedInUser;
+  
+  const TableDetailScreen({
+    super.key, 
+    required this.tableId,
+    this.loggedInUser,
+  });
 
   @override
   State<TableDetailScreen> createState() => _TableDetailScreenState();
@@ -29,14 +35,21 @@ class _TableDetailScreenState extends State<TableDetailScreen>
   TableModel? _currentTableData;
   late TabController _tabController;
   final TextEditingController _noteController = TextEditingController();
-  bool _showSalesCount = false;
+  bool _showChangeCalculator = false;
   final CategoryModel _allCategory = CategoryModel(id: 'all', name: 'Tümü');
   int _currentTabControllerLength = 1;
   final ScrollController _orderListController = ScrollController();
+  
+  late String _userRole;
+  final TextEditingController _receivedAmountController = TextEditingController();
+  double _changeAmount = 0.0;
+  int _splitPersonCount = 1;
 
   @override
   void initState() {
     super.initState();
+    _userRole = widget.loggedInUser?['userRole'] ?? 'Garson';
+    
     _tabController = TabController(length: 1, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _updateTableDataAndTimer(listen: false);
@@ -45,6 +58,7 @@ class _TableDetailScreenState extends State<TableDetailScreen>
       _updateTabController(productProvider.categories);
     });
   }
+
 
   @override
   void didUpdateWidget(covariant TableDetailScreen oldWidget) {
@@ -151,6 +165,7 @@ class _TableDetailScreenState extends State<TableDetailScreen>
     _tabController.dispose();
     _noteController.dispose();
     _orderListController.dispose();
+    _receivedAmountController.dispose();
     super.dispose();
   }
 
@@ -198,9 +213,13 @@ class _TableDetailScreenState extends State<TableDetailScreen>
                       const SizedBox(height: 16),
                       _buildOrderListSection(
                           currentTable, tableProvider, productProvider),
+                    if (_showChangeCalculator) ...[
                       const SizedBox(height: 16),
-                      _buildActionButtons(currentTable),
-                      const SizedBox(height: 16),
+                      _buildChangeCalculationSection(currentTable),
+                    ],
+                    const SizedBox(height: 16),
+                    _buildActionButtons(currentTable),
+                    const SizedBox(height: 16),
                     ],
                   ),
                 ),
@@ -243,43 +262,62 @@ class _TableDetailScreenState extends State<TableDetailScreen>
               color: Color(0xFF1A1A2E),
               fontSize: 24)),
       toolbarHeight: 70,
+      leadingWidth: 70,
       backgroundColor: Colors.white,
       foregroundColor: const Color(0xFF1A1A2E),
       elevation: 0,
       shadowColor: Colors.black.withOpacity(0.05),
       surfaceTintColor: Colors.white,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new_rounded),
-        onPressed: () => Navigator.of(context).pop(),
-      ),
-      actions: [
-        _buildAppBarAction(
-          _showSalesCount
-              ? Icons.visibility_rounded
-              : Icons.visibility_off_rounded,
-          _showSalesCount
-              ? 'Satış Sayılarını Gizle'
-              : 'Satış Sayılarını Göster',
-          Colors.teal,
-          () {
-            if (mounted) {
-              setState(() => _showSalesCount = !_showSalesCount);
-              _showSnackBar(
-                _showSalesCount
-                    ? 'Ürün satış sayıları GÖRÜNÜYOR.'
-                    : 'Ürün satış sayıları GİZLENDİ.',
-              );
-            }
-          },
+      leading: Center(
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => Navigator.of(context).pop(),
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.grey.shade300, width: 1),
+              ),
+              child: const Center(
+                child: Icon(Icons.arrow_back_ios_new_rounded,
+                    size: 20, color: Color(0xFF1A1A2E)),
+              ),
+            ),
+          ),
         ),
-        const SizedBox(width: 16),
-      ],
-    );
-  }
+      ),
+    actions: [
+      _buildAppBarAction(
+        _showChangeCalculator
+            ? Icons.calculate_rounded
+            : Icons.calculate_outlined,
+        _showChangeCalculator
+            ? 'Hesaplayıcıyı Gizle'
+            : 'Hesaplayıcıyı Göster',
+        _showChangeCalculator ? Colors.blue : Colors.grey,
+        () {
+          if (mounted) {
+            setState(() => _showChangeCalculator = !_showChangeCalculator);
+            _showSnackBar(
+              _showChangeCalculator
+                  ? 'Para üstü hesaplayıcı GÖRÜNÜYOR.'
+                  : 'Para üstü hesaplayıcı GİZLENDİ.',
+            );
+          }
+        },
+      ),
+      const SizedBox(width: 16),
+    ],
+  );
+}
 
   Widget _buildSummaryCard(TableModel currentTable) {
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [Colors.white, Colors.blue.shade50],
@@ -289,54 +327,41 @@ class _TableDetailScreenState extends State<TableDetailScreen>
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.blue.withOpacity(0.15),
+            color: Colors.blue.withOpacity(0.12),
             blurRadius: 16,
-            offset: const Offset(0, 8),
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildInfoColumn(
-                  'Geçen Süre',
-                  '${_elapsedTime.inHours.toString().padLeft(2, '0')}:${(_elapsedTime.inMinutes % 60).toString().padLeft(2, '0')}:${(_elapsedTime.inSeconds % 60).toString().padLeft(2, '0')}',
-                  Icons.timer_rounded,
-                  Colors.deepPurple),
-              _buildInfoColumn(
-                  'Mevcut Ciro',
-                  NumberFormat.currency(locale: 'tr_TR', symbol: '₺')
-                      .format(currentTable.totalRevenue),
-                  Icons.account_balance_wallet_rounded,
-                  Colors.teal),
-            ],
+          Expanded(
+            flex: 3,
+            child: _buildInfoColumn(
+                'Süre',
+                '${_elapsedTime.inHours.toString().padLeft(2, '0')}:${(_elapsedTime.inMinutes % 60).toString().padLeft(2, '0')}:${(_elapsedTime.inSeconds % 60).toString().padLeft(2, '0')}',
+                Icons.timer_rounded,
+                Colors.deepPurple),
           ),
-          if (currentTable.note != null && currentTable.note!.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 16.0),
-              child: _buildNoteDisplay(currentTable),
-            ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: () => _showNoteEditDialog(context, currentTable),
-              icon: Icon(
-                  currentTable.note != null && currentTable.note!.isNotEmpty
-                      ? Icons.edit_note_rounded
-                      : Icons.note_add_rounded,
-                  size: 20,
-                  color: Colors.blue.shade700),
-              label: Text(
-                currentTable.note != null && currentTable.note!.isNotEmpty
-                    ? 'Notu Düzenle'
-                    : 'Not Ekle',
-                style: TextStyle(
-                    color: Colors.blue.shade700, fontWeight: FontWeight.bold),
-              ),
-            ),
+          _buildVerticalSeparator(),
+          Expanded(
+            flex: 3,
+            child: _buildInfoColumn(
+                'Ciro',
+                NumberFormat.currency(locale: 'tr_TR', symbol: '₺')
+                    .format(currentTable.totalRevenue),
+                Icons.account_balance_wallet_rounded,
+                Colors.teal),
+          ),
+          _buildVerticalSeparator(),
+          Expanded(
+            flex: 3,
+            child: _buildSplitBillSection(currentTable),
+          ),
+          _buildVerticalSeparator(),
+          Expanded(
+            flex: 2,
+            child: _buildCompactNoteSection(currentTable),
           ),
         ],
       ),
@@ -347,29 +372,383 @@ class _TableDetailScreenState extends State<TableDetailScreen>
       String title, String value, IconData icon, Color color) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
         Row(
           children: [
-            Icon(icon, color: color.withOpacity(0.8), size: 18),
-            const SizedBox(width: 8),
+            Icon(icon, color: color.withOpacity(0.7), size: 16),
+            const SizedBox(width: 6),
             Text(title,
                 style: TextStyle(
-                    fontSize: 15,
-                    color: Colors.grey.shade700,
+                    fontSize: 14,
+                    color: Colors.grey.shade600,
                     fontWeight: FontWeight.w600)),
           ],
         ),
-        const SizedBox(height: 6),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 32,
-            fontWeight: FontWeight.bold,
-            color: color,
-            fontFeatures: const [FontFeature.tabularFigures()],
+        const SizedBox(height: 4),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: color,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildVerticalSeparator() {
+    return Container(
+      height: 40,
+      width: 1,
+      margin: const EdgeInsets.symmetric(horizontal: 10),
+      color: Colors.blue.withOpacity(0.15),
+    );
+  }
+
+  Widget _buildSplitBillSection(TableModel currentTable) {
+    final double total = currentTable.totalRevenue;
+    final double perPerson =
+        _splitPersonCount > 0 ? (total / _splitPersonCount) : total;
+    final String perPersonFormatted =
+        NumberFormat.currency(locale: 'tr_TR', symbol: '₺').format(perPerson);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.people_alt_rounded,
+                color: Colors.indigo.shade600.withOpacity(0.8), size: 16),
+            const SizedBox(width: 6),
+            Text(
+              'Kişi Başı',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: () => _showSplitPersonDialog(currentTable),
+                borderRadius: BorderRadius.circular(8),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    perPersonFormatted,
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: _splitPersonCount > 1
+                          ? Colors.indigo.shade700
+                          : Colors.indigo.shade500,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            // Dikey Kişi Sayacı (▲ Sayı ▼)
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.indigo.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.indigo.shade100),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  InkWell(
+                    onTap: () => setState(() => _splitPersonCount++),
+                    borderRadius: BorderRadius.circular(4),
+                    child: Icon(
+                      Icons.keyboard_arrow_up_rounded,
+                      size: 14,
+                      color: Colors.indigo.shade700,
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () => _showSplitPersonDialog(currentTable),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 1.0, horizontal: 2.0),
+                      child: Text(
+                        '$_splitPersonCount',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.indigo.shade900,
+                          height: 1.1,
+                        ),
+                      ),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: _splitPersonCount > 1
+                        ? () => setState(() => _splitPersonCount--)
+                        : null,
+                    borderRadius: BorderRadius.circular(4),
+                    child: Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 14,
+                      color: _splitPersonCount > 1
+                          ? Colors.indigo.shade700
+                          : Colors.grey.shade400,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  void _showSplitPersonDialog(TableModel currentTable) {
+    final textController =
+        TextEditingController(text: _splitPersonCount.toString());
+    int tempCount = _splitPersonCount;
+
+    _showStyledDialog(
+      context: context,
+      title: 'Hesabı Bölüştür (Alman Usulü)',
+      icon: Icons.groups_rounded,
+      iconColor: Colors.indigo.shade600,
+      content: StatefulBuilder(
+        builder: (context, setDialogState) {
+          final double total = currentTable.totalRevenue;
+          final double perPerson =
+              tempCount > 0 ? (total / tempCount) : total;
+
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Masa hesabını kaç kişiye bölüştürmek istiyorsunuz?',
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+              ),
+              const SizedBox(height: 14),
+              // Hızlı Seçim Butonları (Pills)
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [2, 3, 4, 5, 6, 8, 10].map((count) {
+                  final isSelected = tempCount == count;
+                  return ChoiceChip(
+                    label: Text('$count Kişi'),
+                    selected: isSelected,
+                    selectedColor: Colors.indigo.shade600,
+                    labelStyle: TextStyle(
+                      color: isSelected ? Colors.white : Colors.indigo.shade900,
+                      fontWeight:
+                          isSelected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                    backgroundColor: Colors.indigo.shade50,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      side: BorderSide(
+                        color: isSelected
+                            ? Colors.indigo.shade600
+                            : Colors.indigo.shade100,
+                      ),
+                    ),
+                    onSelected: (selected) {
+                      if (selected) {
+                        setDialogState(() {
+                          tempCount = count;
+                          textController.text = count.toString();
+                        });
+                      }
+                    },
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+              // Manuel Kişi Sayısı Girişi
+              TextField(
+                controller: textController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'Kişi Sayısı',
+                  hintText: 'Örn: 4',
+                  prefixIcon: const Icon(Icons.people_outline_rounded,
+                      color: Colors.indigo),
+                  border:
+                      OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide:
+                        const BorderSide(color: Colors.indigo, width: 2),
+                  ),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                ),
+                onChanged: (val) {
+                  final parsed = int.tryParse(val);
+                  if (parsed != null && parsed > 0) {
+                    setDialogState(() {
+                      tempCount = parsed;
+                    });
+                  }
+                },
+              ),
+              const SizedBox(height: 18),
+              // Hesap Özeti Kutusu
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.indigo.shade50,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.indigo.shade100),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Toplam Masa Tutarı:',
+                            style: TextStyle(
+                                color: Colors.grey.shade700, fontSize: 13)),
+                        Text(
+                          NumberFormat.currency(locale: 'tr_TR', symbol: '₺')
+                              .format(total),
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                      ],
+                    ),
+                    const Divider(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Kişi Başı Düşen:',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 14)),
+                            Text('($tempCount kişi paylaşıyor)',
+                                style: TextStyle(
+                                    color: Colors.grey.shade600, fontSize: 11)),
+                          ],
+                        ),
+                        Text(
+                          NumberFormat.currency(locale: 'tr_TR', symbol: '₺')
+                              .format(perPerson),
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.indigo.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+      actions: [
+        if (tempCount > 1)
+          TextButton(
+            onPressed: () {
+              setState(() => _splitPersonCount = 1);
+              Navigator.of(context).pop();
+            },
+            child: const Text('Sıfırla (1 Kişi)',
+                style: TextStyle(color: Colors.red)),
+          ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('İptal'),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.indigo.shade600,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+          onPressed: () {
+            final parsed = int.tryParse(textController.text);
+            setState(() {
+              _splitPersonCount =
+                  (parsed != null && parsed > 0) ? parsed : tempCount;
+            });
+            Navigator.of(context).pop();
+          },
+          child: const Text('Uygula',
+              style:
+                  TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCompactNoteSection(TableModel currentTable) {
+    final hasNote = currentTable.note != null && currentTable.note!.isNotEmpty;
+
+    return Center(
+      child: InkWell(
+        onTap: () => _showNoteEditDialog(context, currentTable),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: EdgeInsets.symmetric(
+              horizontal: hasNote ? 12 : 10, vertical: hasNote ? 8 : 10),
+          decoration: BoxDecoration(
+            color: hasNote
+                ? Colors.amber.shade50
+                : Colors.blue.shade50.withOpacity(0.5),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+                color: hasNote ? Colors.amber.shade200 : Colors.blue.shade100),
+          ),
+          child: hasNote
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.sticky_note_2_rounded,
+                        size: 18, color: Colors.amber.shade800),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        currentTable.note!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.brown.shade800,
+                          fontWeight: FontWeight.w500,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              : Icon(Icons.note_add_rounded,
+                  size: 24, color: Colors.blue.shade700),
+        ),
+      ),
     );
   }
 
@@ -504,7 +883,8 @@ class _TableDetailScreenState extends State<TableDetailScreen>
                       currentTable.orders.length == 1 &&
                           orderItem.quantity == 1;
 
-                  tableProvider.decrementOrderItem(currentTable.id, orderItem);
+                  tableProvider.decrementOrderItem(currentTable.id, orderItem,
+                      user: widget.loggedInUser ?? {'userName': 'Bilinmeyen'});
 
                   if (!orderItem.isSpecialProduct) {
                     productProvider.incrementProductSalesCount(
@@ -513,7 +893,8 @@ class _TableDetailScreenState extends State<TableDetailScreen>
 
                   if (isLastItemOnTable) {
                     tableProvider.clearTable(currentTable.id,
-                        addToRevenue: false);
+                        addToRevenue: false,
+                        user: widget.loggedInUser ?? {'userName': 'Bilinmeyen'});
                   }
                 },
               ),
@@ -531,7 +912,8 @@ class _TableDetailScreenState extends State<TableDetailScreen>
                 icon: Icons.add,
                 color: Colors.green.shade500,
                 onTap: () {
-                  tableProvider.incrementOrderItem(currentTable.id, orderItem);
+                  tableProvider.incrementOrderItem(currentTable.id, orderItem,
+                      user: widget.loggedInUser ?? {'userName': 'Bilinmeyen'});
                   if (!orderItem.isSpecialProduct) {
                     productProvider.incrementProductSalesCount(
                         orderItem.productId, 1);
@@ -563,7 +945,12 @@ class _TableDetailScreenState extends State<TableDetailScreen>
     );
   }
 
+
+
   Widget _buildActionButtons(TableModel currentTable) {
+    // Garson sadece sipariş alabilir, hesap kapatamaz veya veresiye yazamaz.
+    final bool canPayment = _userRole != 'Garson';
+    
     return Row(
       children: [
         Expanded(
@@ -571,7 +958,7 @@ class _TableDetailScreenState extends State<TableDetailScreen>
             text: 'Veresiyeye Ekle',
             icon: Icons.book_online_rounded,
             color: Colors.blue.shade600,
-            isEnabled: currentTable.orders.isNotEmpty,
+            isEnabled: canPayment && currentTable.orders.isNotEmpty, // Garsona disabled
             onPressed: () =>
                 _showVeresiyeConfirmationDialog(context, currentTable),
           ),
@@ -582,12 +969,215 @@ class _TableDetailScreenState extends State<TableDetailScreen>
             text: 'Hesabı Kapat',
             icon: Icons.payment_rounded,
             color: Colors.red.shade500,
-            isEnabled: currentTable.orders.isNotEmpty,
+            isEnabled: canPayment && currentTable.orders.isNotEmpty, // Garsona disabled
             onPressed: () => _showPaymentConfirmationDialog(
                 context, currentTable, _elapsedTime),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildQuickAmountButton(String label, double value) {
+    return InkWell(
+      onTap: () {
+        _receivedAmountController.text = value.toStringAsFixed(2);
+        setState(() {});
+      },
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.teal.shade50,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.teal.shade100),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+              color: Colors.teal.shade700,
+              fontWeight: FontWeight.bold,
+              fontSize: 13),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChangeCalculationSection(TableModel currentTable) {
+    // Controller'dan alınan anlık veri
+    final rawText = _receivedAmountController.text.trim().replaceAll(',', '.');
+    final received = double.tryParse(rawText) ?? 0.0;
+    final isInputEmpty = _receivedAmountController.text.isEmpty;
+    final change = isInputEmpty ? 0.0 : (received - currentTable.totalRevenue);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.teal.withOpacity(0.08),
+            blurRadius: 15,
+            spreadRadius: 2,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(color: Colors.teal.withOpacity(0.1), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                "Para Üstü Hesapla",
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.teal,
+                    fontSize: 16),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.teal.shade50,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  "Toplam: ${NumberFormat.currency(locale: 'tr_TR', symbol: '₺').format(currentTable.totalRevenue)}",
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.teal.shade800,
+                      fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: TextField(
+                  controller: _receivedAmountController,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  onTapOutside: (_) => FocusScope.of(context).unfocus(),
+                  cursorColor: Colors.teal,
+                  decoration: InputDecoration(
+                    labelText: "Alınan Tutar",
+                    hintText: "0.00",
+                    prefixIcon:
+                        const Icon(Icons.payments_outlined, color: Colors.teal),
+                    suffixIcon: _receivedAmountController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 18),
+                            onPressed: () {
+                              _receivedAmountController.clear();
+                              setState(() {});
+                            },
+                          )
+                        : null,
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(15)),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(15),
+                      borderSide: const BorderSide(color: Colors.teal, width: 2),
+                    ),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  ),
+                  onChanged: (value) {
+                    setState(() {});
+                  },
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                flex: 1,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    const Text("Para Üstü",
+                        style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    const SizedBox(height: 4),
+                    FittedBox(
+                      child: Text(
+                        NumberFormat.currency(locale: 'tr_TR', symbol: '₺')
+                            .format(change < 0 ? 0 : change),
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: isInputEmpty
+                              ? Colors.grey.shade400
+                              : (change >= 0
+                                  ? Colors.green.shade700
+                                  : Colors.red.shade700),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Hızlı Ödeme Butonları (Kaydırılabilir)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            child: Row(
+              children: [
+                // Tam Hesap Butonu
+                _buildQuickAmountButton("Tam Hesap", currentTable.totalRevenue),
+                const SizedBox(width: 8),
+                if (_splitPersonCount > 1 && currentTable.totalRevenue > 0) ...[
+                  _buildQuickAmountButton(
+                    "1 Kişi Payı (${NumberFormat.currency(locale: 'tr_TR', symbol: '₺').format(currentTable.totalRevenue / _splitPersonCount)})",
+                    currentTable.totalRevenue / _splitPersonCount,
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                // Diğer Banknotlar ve Sık Kullanılan Tutarlar
+                ...[200, 150, 140, 120, 100, 90, 80, 70, 60, 50, 45, 40, 30, 25, 20, 10, 5].map((amount) => Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: _buildQuickAmountButton(
+                          "₺$amount", amount.toDouble()),
+                    )),
+              ],
+            ),
+          ),
+          if (change < 0 && !isInputEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline,
+                        color: Colors.red.shade700, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        "Alınan tutar eksik: ${NumberFormat.currency(locale: 'tr_TR', symbol: '₺').format(change.abs())}",
+                        style: TextStyle(
+                            color: Colors.red.shade800,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -639,6 +1229,16 @@ class _TableDetailScreenState extends State<TableDetailScreen>
             child: TabBar(
               controller: _tabController,
               isScrollable: true,
+              splashBorderRadius: BorderRadius.circular(12),
+              overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
+                if (states.contains(WidgetState.hovered)) {
+                  return Colors.deepPurple.withValues(alpha: 0.05);
+                }
+                if (states.contains(WidgetState.pressed)) {
+                  return Colors.deepPurple.withValues(alpha: 0.1);
+                }
+                return Colors.transparent;
+              }),
               // remove divider
               dividerColor: Colors.transparent,
               // Indicator tasarımı: Beyaz kutu, gölge ve yuvarlatılmış köşeler
@@ -777,47 +1377,25 @@ class _TableDetailScreenState extends State<TableDetailScreen>
         final product = productsToDisplay[index];
         final isFixed = productProvider.fixedProductId == product.id;
 
-        return Card(
-          margin: const EdgeInsets.symmetric(vertical: 5.0),
-          elevation: isFixed ? 3 : 1,
-          shadowColor: isFixed
-              ? Colors.blue.withOpacity(0.3)
-              : Colors.black.withOpacity(0.1),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          color: isFixed ? Colors.blue[50] : Colors.grey.shade50,
-          child: ListTile(
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: Text(product.name,
-                style:
-                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 4),
-                Text(
-                  NumberFormat.currency(locale: 'tr_TR', symbol: '₺')
-                      .format(product.price),
-                  style: TextStyle(
-                      fontSize: 15,
-                      color: Colors.green[700],
-                      fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 2),
-                if (_showSalesCount)
-                  Text(
-                    'Satış: ${product.salesCount} | Kategori: ${getCategoryName(product.categoryId)}',
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-              ],
-            ),
-            trailing: isFixed
-                ? Icon(Icons.push_pin_rounded,
-                    color: Colors.blue.shade600, size: 22)
-                : null, // Yıldız ikonu kaldırıldı
+        return Container(
+          margin: const EdgeInsets.symmetric(vertical: 6.0),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: isFixed
+                    ? Colors.blue.withOpacity(0.2)
+                    : Colors.black.withOpacity(0.04),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+            border: isFixed
+                ? Border.all(color: Colors.blue.shade200, width: 1.5)
+                : null,
+          ),
+          child: InkWell(
             onTap: () {
               final newOrderItem = OrderItem(
                 orderId: 0,
@@ -828,7 +1406,8 @@ class _TableDetailScreenState extends State<TableDetailScreen>
                 isSpecialProduct: false,
               );
 
-              tableProvider.addOrUpdateOrder(currentTable.id, newOrderItem);
+              tableProvider.addOrUpdateOrder(currentTable.id, newOrderItem,
+                  user: widget.loggedInUser ?? {'userName': 'Bilinmeyen'});
               productProvider.incrementProductSalesCount(product.id, 1);
 
               if (_orderListController.hasClients) {
@@ -851,6 +1430,93 @@ class _TableDetailScreenState extends State<TableDetailScreen>
                     : '${product.name} sabitlemesi kaldırıldı.',
               );
             },
+            borderRadius: BorderRadius.circular(20),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  // Ürün İkonu / İlk Harf
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: isFixed
+                          ? Colors.blue.shade100
+                          : Colors.blue.shade50.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Center(
+                      child: Text(
+                        product.name.substring(0, 1).toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue.shade700,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          product.name,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1A1A2E),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Icon(Icons.trending_up_rounded,
+                                size: 14, color: Colors.blue.shade400),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${product.salesCount} Satış',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      if (isFixed)
+                        Icon(Icons.push_pin_rounded,
+                            color: Colors.blue.shade600, size: 18),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          NumberFormat.currency(locale: 'tr_TR', symbol: '₺')
+                              .format(product.price),
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: Colors.green.shade800,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
         );
       },
@@ -863,18 +1529,37 @@ class _TableDetailScreenState extends State<TableDetailScreen>
       IconData icon, String tooltip, Color color, VoidCallback onPressed) {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.3), width: 1.5),
-      ),
-      child: IconButton(
-        icon: Icon(icon, size: 26, color: color),
-        tooltip: tooltip,
-        onPressed: () {
-          HapticFeedback.lightImpact();
-          onPressed();
-        },
+      child: Tooltip(
+        message: tooltip,
+        waitDuration: const Duration(milliseconds: 400),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              onPressed();
+            },
+            borderRadius: BorderRadius.circular(14),
+            splashColor: color.withOpacity(0.2),
+            highlightColor: color.withOpacity(0.1),
+            child: Ink(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [color.withOpacity(0.12), color.withOpacity(0.05)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: color.withOpacity(0.35), width: 1.5),
+              ),
+              child: Center(
+                child: Icon(icon, size: 24, color: color),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -1046,6 +1731,29 @@ class _TableDetailScreenState extends State<TableDetailScreen>
                     color: Colors.green),
               ),
             ),
+            if (_splitPersonCount > 1 && currentTable.totalRevenue > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Center(
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.indigo.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.indigo.shade100),
+                    ),
+                    child: Text(
+                      '$_splitPersonCount Kişi İçin Kişi Başı: ${NumberFormat.currency(locale: 'tr_TR', symbol: '₺').format(currentTable.totalRevenue / _splitPersonCount)}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.indigo.shade700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
         actions: [
@@ -1087,7 +1795,8 @@ class _TableDetailScreenState extends State<TableDetailScreen>
                   itemsJson: itemsJson,
                 );
 
-                await tableProvider.clearTable(currentTable.id);
+                await tableProvider.clearTable(currentTable.id,
+                    user: widget.loggedInUser ?? {'userName': 'Bilinmeyen'});
 
                 _timer?.cancel();
                 _timer = null;
@@ -1191,7 +1900,8 @@ class _TableDetailScreenState extends State<TableDetailScreen>
                 );
 
                 await tableProvider.clearTable(currentTable.id,
-                    addToRevenue: false);
+                    addToRevenue: false,
+                    user: widget.loggedInUser ?? {'userName': 'Bilinmeyen'});
 
                 _timer?.cancel();
                 _timer = null;
@@ -1299,7 +2009,8 @@ class _TableDetailScreenState extends State<TableDetailScreen>
               );
               try {
                 Provider.of<TableProvider>(context, listen: false)
-                    .addOrUpdateOrder(currentTable.id, newSpecialItem);
+                    .addOrUpdateOrder(currentTable.id, newSpecialItem,
+                        user: widget.loggedInUser ?? {'userName': 'Bilinmeyen'});
 
                 Navigator.of(context).pop();
               } catch (e) {

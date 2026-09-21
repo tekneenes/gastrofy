@@ -191,13 +191,13 @@ class _ReportListScreenState extends State<ReportListScreen> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: Colors.deepPurple.withOpacity(0.1),
+              color: Colors.teal.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(
               Icons.find_in_page_outlined,
               size: 64,
-              color: Colors.deepPurple.shade400,
+              color: Colors.teal.shade400,
             ),
           ),
           const SizedBox(height: 24),
@@ -246,7 +246,7 @@ class _ReportListScreenState extends State<ReportListScreen> {
           _buildAppBarAction(
             MdiIcons.fileRefreshOutline,
             'Listeyi Yenile',
-            Colors.deepPurple.shade400,
+            Colors.teal.shade600,
             _refreshList,
           ),
           const SizedBox(width: 8),
@@ -258,7 +258,7 @@ class _ReportListScreenState extends State<ReportListScreen> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return Center(
                 child: CircularProgressIndicator(
-              color: Colors.deepPurple.shade400,
+              color: Colors.teal.shade600,
             ));
           } else if (snapshot.hasError) {
             return Center(
@@ -306,7 +306,8 @@ class _ReportListScreenState extends State<ReportListScreen> {
                 ),
                 child: Card(
                   elevation: 4,
-                  shadowColor: Colors.black.withOpacity(0.05),
+                  color: Colors.white,
+                  shadowColor: Colors.grey.withOpacity(0.1),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16)),
                   clipBehavior: Clip.antiAlias,

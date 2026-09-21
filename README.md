@@ -1,4 +1,4 @@
-# altin_tepsi_masa_takip
+# gastromind
 
 A new Flutter project.
 

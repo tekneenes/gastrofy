@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:marquee/marquee.dart';
+import 'logs_screen.dart';
 import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -11,15 +13,23 @@ import 'login_screen.dart'; // <-- EKLENDİ: Yönlendirme için
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:reorderable_grid_view/reorderable_grid_view.dart';
+import 'package:showcaseview/showcaseview.dart';
+import '../utils/tutorial_keys.dart';
+import '../widgets/custom_tutorial_tooltip.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:uuid/uuid.dart';
+import 'quick_sale_screen.dart';
 import '../models/table_model.dart';
 import '../providers/table_provider.dart';
 import '../services/database_helper.dart';
 import '../services/database_service.dart'; // <-- EKLENDİ: Kullanıcı kontrolü için
+import '../providers/currency_provider.dart';
+import '../models/currency_model.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required Map<String, dynamic> loggedInUser});
+  final Map<String, dynamic> loggedInUser;
+
+  const HomeScreen({super.key, required this.loggedInUser});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -37,6 +47,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   List<FlSpot> _dailyRevenueSpots = [];
   bool _isLoadingChart = true;
 
+  // --- DÖVİZ TICKER STATE ---
+  int _currencyIndex = 0;
+  Timer? _currencyTickerTimer;
+
   @override
   void initState() {
     super.initState();
@@ -45,31 +59,233 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       await tableProvider.initialize();
       _fetchChartData();
       _startTickerTimer();
-      _loadSavedViewMode(tableProvider);
+      _startCurrencyTicker();
     });
     _startGlobalTimer();
   }
 
-  Future<void> _loadSavedViewMode(TableProvider provider) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final savedIndex = prefs.getInt('saved_view_mode');
-
-      if (savedIndex != null &&
-          savedIndex >= 0 &&
-          savedIndex < TableViewMode.values.length) {
-        final targetMode = TableViewMode.values[savedIndex];
-        int safetyCounter = 0;
-        while (provider.viewMode != targetMode && safetyCounter < 10) {
-          provider.cycleViewMode();
-          safetyCounter++;
-        }
+  void _startCurrencyTicker() {
+    _currencyTickerTimer?.cancel();
+    _currencyTickerTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
+      if (mounted) {
+        setState(() {
+          _currencyIndex++;
+        });
       }
-    } catch (e) {
-      print("Görünüm modu yüklenirken hata: $e");
-    }
+    });
   }
 
+
+  Widget _buildCurrencyTicker() {
+    return Consumer<CurrencyProvider>(
+      builder: (context, provider, child) {
+        final rates = provider.rates;
+        if (rates == null) return const SizedBox();
+
+        final List<Map<String, dynamic>> items = [
+          {'label': 'Dolar', 'data': rates.usd},
+          {'label': 'Euro', 'data': rates.eur},
+          {'label': 'Altın', 'data': rates.gold},
+          {'label': 'Sterlin', 'data': rates.gbp},
+          {'label': 'Gümüş', 'data': rates.silver},
+          {'label': 'Ruble', 'data': rates.rub},
+          {'label': 'Kuv. Dinar', 'data': rates.kwd},
+          {'label': 'Riyal', 'data': rates.sar},
+          {'label': 'Paladyum', 'data': rates.palladium},
+        ];
+
+        final int currentIndex = _currencyIndex % items.length;
+        final currentItem = items[currentIndex];
+        final String label = currentItem['label'] as String;
+        final CurrencyData data = currentItem['data'] as CurrencyData;
+
+        final bool isUp = data.change.contains('+') || 
+                          (!data.change.contains('-') && data.change != '%0.00' && data.change != '0');
+        
+        final Color trendColor = isUp ? Colors.green.shade700 : Colors.red.shade700;
+
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          width: 150,
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: trendColor.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: trendColor.withOpacity(0.1)),
+          ),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 500),
+            transitionBuilder: (Widget child, Animation<double> animation) {
+              final inAnimation = Tween<Offset>(
+                begin: const Offset(0.0, 1.0),
+                end: Offset.zero,
+              ).animate(animation);
+
+              final outAnimation = Tween<Offset>(
+                begin: const Offset(0.0, -1.0),
+                end: Offset.zero,
+              ).animate(animation);
+              
+              // Only animate slide if key changes
+              final bool isIncoming = child.key == ValueKey('${label}_${data.selling}');
+
+              return ClipRect(
+                child: SlideTransition(
+                  position: isIncoming ? inAnimation : outAnimation,
+                  child: FadeTransition(
+                    opacity: animation,
+                    child: child,
+                  ),
+                ),
+              );
+            },
+            child: _buildTickerContent(label, data, trendColor),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTickerContent(String label, CurrencyData data, Color trendColor) {
+    final String trendIcon = (data.change.contains('+') || 
+                      (!data.change.contains('-') && data.change != '%0.00' && data.change != '0')) 
+                      ? '▲' : '▼';
+
+    return SizedBox(
+      key: ValueKey('${label}_${data.selling}'), // Key for animation
+      height: 40,
+      child: Center(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                '$label: ',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1A2E),
+                ),
+              ),
+              Text(
+                '${data.selling} TL',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: trendColor,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '$trendIcon ${data.change}',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: trendColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLiveLogTicker() {
+    return Consumer<TableProvider>(
+      builder: (context, provider, child) {
+        final log = provider.lastLog;
+        if (log == null) return const SizedBox();
+
+        final String logText = "${log['userName']}: ${log['details']}";
+        // Timestamp bazlı key kullanarak her yeni logda animasyon tetiklenmesini sağlıyoruz
+        final String logKey = "${log['timestamp']}_${log['details']}";
+
+        return GestureDetector(
+          onTap: () => _showLogsScreen(),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10), // Yükseklik arttırıldı
+            height: 40, // Sabit yükseklik verilerek diğer butonlarla eşitlendi
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.blue.shade600, Colors.blue.shade800],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.blue.withOpacity(0.2),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.notifications_active_rounded,
+                    size: 16, color: Colors.white),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 500),
+                    transitionBuilder: (Widget child, Animation<double> animation) {
+                      return SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0.0, -1.0),
+                          end: Offset.zero,
+                        ).animate(CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeOutBack,
+                        )),
+                        child: FadeTransition(opacity: animation, child: child),
+                      );
+                    },
+                    child: logText.length > 25
+                        ? SizedBox(
+                            key: ValueKey(logKey),
+                            height: 18,
+                            child: RepaintBoundary(
+                              child: Marquee(
+                                text: logText,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                                scrollAxis: Axis.horizontal,
+                                velocity: 30.0,
+                                blankSpace: 30.0,
+                                pauseAfterRound: const Duration(seconds: 2),
+                                accelerationDuration: Duration.zero,
+                                decelerationDuration: Duration.zero,
+                              ),
+                            ),
+                          )
+                        : Text(
+                            logText,
+                            key: ValueKey(logKey),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
   // --- YENİ: GÜVENLİ ÇIKIŞ MANTIĞI ---
   Future<void> _secureLogout() async {
     try {
@@ -181,15 +397,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
       final provider = Provider.of<TableProvider>(context, listen: false);
       if (provider.activeTableCount > 0) {
-        setState(() {
-          // Arayüzü güncelle
-        });
+        if (mounted) {
+          setState(() {
+            // Arayüzü güncelle
+          });
+        }
       }
     });
   }
 
   Future<void> _fetchChartData({bool refresh = false}) async {
-    if (!refresh) setState(() => _isLoadingChart = true);
+    if (!refresh) {
+      if (mounted) setState(() => _isLoadingChart = true);
+    }
     try {
       final hourlyData =
           await DatabaseHelper.instance.getHourlyRevenueForToday();
@@ -241,6 +461,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _tableController.dispose();
     _globalTimer?.cancel();
     _tickerTimer?.cancel();
+    _currencyTickerTimer?.cancel();
     super.dispose();
   }
 
@@ -248,173 +469,311 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     switch (mode) {
       case TableViewMode.list:
         return Icons.grid_view;
-      case TableViewMode.gridTwo:
+      case TableViewMode.grid2:
         return Icons.view_comfy;
-      case TableViewMode.gridThree:
+      case TableViewMode.grid3:
         return Icons.apps;
-      case TableViewMode.gridFour:
+      case TableViewMode.grid4:
         return Icons.grid_on;
-      case TableViewMode.gridFive:
+      case TableViewMode.grid5:
         return Icons.view_list;
-      default:
-        return Icons.grid_view;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // Role Checks
+    final userRole = widget.loggedInUser['userRole'] ?? 'Garson';
+    final bool isGarson = userRole == 'Garson';
+    final bool isKasiyer = userRole == 'Kasiyer';
+    final bool isAdmin = userRole == 'Yönetici' || userRole == 'Müdür' || userRole == 'Şube Müdürü';
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
-      appBar: AppBar(
-        systemOverlayStyle: SystemUiOverlayStyle.dark,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(70),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: SafeArea(
+            bottom: false,
+            child: SizedBox(
+              height: 70,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Stack(
+                  alignment: Alignment.center,
+                  clipBehavior: Clip.none,
+                  children: [
+                    // --- MERKEZ BAŞLIK ---
+                    if (MediaQuery.of(context).size.width > 1070) // Log ve butonlar çakışmasın
+                      const Text(
+                        'Gastrofy',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1A1A2E),
+                          fontSize: 24,
+                        ),
+                      ),
 
-        // --- YENİ: SOL TARAFA ÇIKIŞ BUTONU EKLENDİ ---
-        leadingWidth: 70,
-        leading: Center(
-          child: _buildAppBarAction(
-            Icons.logout_rounded,
-            'Güvenli Çıkış',
-            Colors.red.shade700,
-            () {
-              _showLogoutConfirmationDialog();
-            },
+                    // --- SOL TARAF: ÇIKIŞ + DÖVİZ + LOG ---
+                    Positioned(
+                      left: 0,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Showcase.withWidget(
+                            key: TutorialKeys.homeCikis,
+                            container: CustomTutorialTooltip(
+                              title: 'Güvenli Çıkış',
+                              description: 'Oturumunuzu kapatarak ana ekrana dönmenizi sağlar.',
+                              themeColor: Colors.red.shade700,
+                            ),
+                            child: _buildAppBarAction(
+                              Icons.logout_rounded,
+                              'Güvenli Çıkış',
+                              Colors.red.shade700,
+                              () => _showLogoutConfirmationDialog(),
+                            ),
+                          ),
+                          // Döviz Ticker (Sadece geniş ekranlarda)
+                          if (MediaQuery.of(context).size.width > 800) ...[
+                            const SizedBox(width: 12),
+                            Showcase.withWidget(
+                              key: TutorialKeys.homeDoviz,
+                              container: CustomTutorialTooltip(
+                                title: 'Döviz Kurları',
+                                description: 'Canlı döviz kurlarını buradan takip edebilirsiniz.',
+                                themeColor: Colors.blue,
+                              ),
+                              child: SizedBox(
+                                width: 180,
+                                child: _buildCurrencyTicker(),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+
+                    // --- SAĞ TARAF: AKSİYONLAR ---
+                    Positioned(
+                      right: 0,
+                      child: Consumer<TableProvider>(
+                        builder: (context, tableProvider, child) {
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (!isGarson)
+                                Showcase.withWidget(
+                                  key: TutorialKeys.homeMasaEkle,
+                                  container: CustomTutorialTooltip(
+                                    title: 'Masa Ekle',
+                                    description: 'Salonunuza yeni masalar eklemek için bu butonu kullanın.',
+                                    themeColor: Colors.green.shade600,
+                                  ),
+                                  child: _buildAppBarAction(Icons.add_circle_outline_rounded,
+                                      'Masa Ekle', Colors.green.shade600, () => _showAddEditTableDialog()),
+                                ),
+                              if (!isGarson) const SizedBox(width: 6),
+                              
+                              // Hızlı Satış (Sadece Geniş Ekran)
+                              if (MediaQuery.of(context).size.width > 600) ...[
+                                Showcase.withWidget(
+                                  key: TutorialKeys.homeHizliSatis,
+                                  container: CustomTutorialTooltip(
+                                    title: 'Hızlı Satış',
+                                    description: 'Masa açmadan hızlıca perakende satış yapmak için burayı kullanın.',
+                                    themeColor: Colors.blue.shade700,
+                                  ),
+                                  child: _buildAppBarAction(Icons.bolt_rounded, 'Hızlı Satış', Colors.blue.shade700, () {
+                                    Navigator.push(
+                                      context,
+                                      PageRouteBuilder(
+                                        pageBuilder: (context, animation, secondaryAnimation) =>
+                                            QuickSaleScreen(loggedInUser: widget.loggedInUser, userRole: userRole),
+                                        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                          return ScaleTransition(
+                                            alignment: Alignment.topRight,
+                                            scale: Tween<double>(begin: 0.0, end: 1.0).animate(
+                                              CurvedAnimation(parent: animation, curve: Curves.easeInOutCubic),
+                                            ),
+                                            child: FadeTransition(opacity: animation, child: child),
+                                          );
+                                        },
+                                      ),
+                                    );
+                                  }),
+                                ),
+                                const SizedBox(width: 6),
+                              ],
+
+                              Showcase.withWidget(
+                                key: TutorialKeys.homeGorunumModu,
+                                container: CustomTutorialTooltip(
+                                  title: 'Görünüm Modu',
+                                  description: 'Masaların liste veya ızgara görünümünü buradan değiştirebilirsiniz.',
+                                  themeColor: Colors.purple.shade600,
+                                ),
+                                child: _buildAppBarAction(_getViewModeIcon(tableProvider.viewMode), 'Mod', Colors.purple.shade600, 
+                                    () => tableProvider.cycleViewMode()),
+                              ),
+                              const SizedBox(width: 6),
+
+                              Showcase.withWidget(
+                                key: TutorialKeys.homeYenile,
+                                container: CustomTutorialTooltip(
+                                  title: 'Verileri Yenile',
+                                  description: 'Masalarınızı ve verilerinizi anlık olarak bulut ile senkronize eder.',
+                                  themeColor: Colors.teal.shade600,
+                                ),
+                                child: _buildAppBarAction(Icons.refresh_rounded, 'Yenile', Colors.teal.shade600, 
+                                    () => tableProvider.refreshTables()),
+                              ),
+                              const SizedBox(width: 6),
+
+                              // İstatistikler ( Göz / Sadece Geniş Ekran)
+                              if (MediaQuery.of(context).size.width > 600)
+                                Showcase.withWidget(
+                                  key: TutorialKeys.homeIstatistikler,
+                                  container: CustomTutorialTooltip(
+                                    title: 'İstatistik Paneli',
+                                    description: 'Günlük ciro ve doluluk oranlarını gösteren paneli açıp kapatır.',
+                                    themeColor: Colors.blueGrey.shade600,
+                                  ),
+                                  child: _buildAppBarAction(
+                                      tableProvider.showActiveTablesInfo ? Icons.visibility : Icons.visibility_off_rounded,
+                                      tableProvider.showActiveTablesInfo ? 'İstatistikleri Gizle' : 'İstatistikleri Göster',
+                                      Colors.blueGrey.shade600,
+                                      () => tableProvider.toggleShowActiveTablesInfo()),
+                                ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
-
-        // ---------------------------------------------
-
-        title: const Text('Masa Takip Sistemi',
-            style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1A1A2E),
-                fontSize: 24)),
-        toolbarHeight: 70,
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF1A1A2E),
-        elevation: 0,
-        shadowColor: Colors.black.withOpacity(0.05),
-        surfaceTintColor: Colors.white,
-        actions: [
-          Consumer<TableProvider>(
-            builder: (context, tableProvider, child) {
-              return Row(
-                children: [
-                  _buildAppBarAction(Icons.add_circle_outline_rounded,
-                      'Masa Ekle', Colors.green.shade600, () {
-                    _showAddEditTableDialog();
-                  }),
-                  const SizedBox(width: 8),
-                  _buildAppBarAction(MdiIcons.calculator, 'Hesap Makinesi',
-                      Colors.blue.shade600, () {
-                    _showSnackBar('Bu özellik geliştirilmeye devam ediyor.',
-                        isSuccess: false);
-                  }),
-                  const SizedBox(width: 8),
-                  _buildAppBarAction(Icons.filter_list_rounded, 'Filtrele',
-                      Colors.orange.shade600, () {
-                    _showFilterDialog();
-                  }),
-                  const SizedBox(width: 8),
-                  _buildAppBarAction(_getViewModeIcon(tableProvider.viewMode),
-                      'Görünümü Değiştir', Colors.purple.shade600, () async {
-                    tableProvider.cycleViewMode();
-
-                    final prefs = await SharedPreferences.getInstance();
-                    await prefs.setInt(
-                        'saved_view_mode', tableProvider.viewMode.index);
-                  }),
-                  const SizedBox(width: 8),
-                  _buildAppBarAction(
-                    tableProvider.showActiveTablesInfo
-                        ? Icons.visibility_rounded
-                        : Icons.visibility_off_rounded,
-                    'Özet Bilgileri',
-                    Colors.indigo.shade600,
-                    tableProvider.toggleShowActiveTablesInfo,
-                  ),
-                  const SizedBox(width: 8),
-                  _buildAppBarAction(
-                      Icons.refresh_rounded, 'Yenile', Colors.teal.shade600,
-                      () {
-                    Provider.of<TableProvider>(context, listen: false)
-                        .refreshTables();
-                    _showSnackBar('Masalar başarıyla yenilendi.',
-                        isSuccess: true);
-                  }),
-                  const SizedBox(width: 16),
-                ],
-              );
-            },
-          ),
-        ],
       ),
       body: Consumer<TableProvider>(
         builder: (context, tableProvider, child) {
           final viewMode = tableProvider.viewMode;
-          int crossAxisCount;
-          double childAspectRatio;
+          int crossAxisCount = 2;
+          double childAspectRatio = 1.0;
 
           switch (viewMode) {
             case TableViewMode.list:
               crossAxisCount = 1;
               childAspectRatio = 3.5;
               break;
-            case TableViewMode.gridTwo:
+            case TableViewMode.grid2:
               crossAxisCount = 2;
               childAspectRatio = 1.05;
               break;
-            case TableViewMode.gridThree:
+            case TableViewMode.grid3:
               crossAxisCount = 3;
               childAspectRatio = 1.0;
               break;
-            case TableViewMode.gridFour:
+            case TableViewMode.grid4:
               crossAxisCount = 4;
               childAspectRatio = 0.95;
               break;
-            case TableViewMode.gridFive:
+            case TableViewMode.grid5:
               crossAxisCount = 5;
               childAspectRatio = 0.9;
               break;
             default:
               crossAxisCount = 2;
-              childAspectRatio = 1.05;
+              childAspectRatio = 1.0;
           }
 
           return Column(
             children: [
-              AnimatedSize(
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeInOut,
-                child: tableProvider.showActiveTablesInfo
-                    ? _buildSummaryCard(tableProvider)
-                    : const SizedBox(height: 8),
+              // YENİ: Bölgeler (Sekmeler) Bölümü - EN ÜSTE ALINDI (AppBar'a değmesi için)
+              Showcase.withWidget(
+                key: TutorialKeys.homeBolgeler,
+                container: CustomTutorialTooltip(
+                  title: 'Bölgeler ve Salonlar',
+                  description: 'İşletmenizdeki Kat 1, Teras, Bahçe gibi bölümler arasında geçiş yapın.',
+                  themeColor: Colors.teal,
+                ),
+                child: _buildSectionTabs(tableProvider),
               ),
+
+              // GARSON İSE ÖZET KARTINI ASLA GÖSTERME
+              if (!isGarson)
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  child: tableProvider.showActiveTablesInfo
+                      ? _buildSummaryCard(tableProvider)
+                      : const SizedBox.shrink(), // Boşluk kaldırıldı
+                ),
+                
               Expanded(
-                child: tableProvider.isLoading
-                    ? _buildShimmerEffect(
-                        crossAxisCount, childAspectRatio, viewMode)
-                    : tableProvider.filteredTables.isEmpty
-                        ? _buildEmptyState(tableProvider.currentFilter)
-                        : ReorderableGridView.builder(
-                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
-                            gridDelegate:
-                                SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: crossAxisCount,
-                              crossAxisSpacing: 16.0,
-                              mainAxisSpacing: 16.0,
-                              childAspectRatio: childAspectRatio,
+                child: Showcase.withWidget(
+                  key: TutorialKeys.homeMasalarArea,
+                  container: CustomTutorialTooltip(
+                    title: 'Masalar ve Siparişler',
+                    description: 'Sipariş almak için bir masaya dokunun. Masaları basılı tutarak yerlerini değiştirebilirsiniz.',
+                    themeColor: Colors.teal,
+                  ),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    transitionBuilder: (Widget child, Animation<double> animation) {
+                      return FadeTransition(opacity: animation, child: child);
+                    },
+                    child: tableProvider.isLoading
+                      ? _buildShimmerEffect(
+                          crossAxisCount, childAspectRatio, viewMode, key: const ValueKey('shimmer'))
+                      : tableProvider.filteredTables.isEmpty
+                          ? _buildEmptyState(tableProvider.currentFilter, key: const ValueKey('empty'))
+                          : ReorderableGridView.builder(
+                              key: ValueKey('grid_${viewMode.index}'), // Mod değiştiğinde animasyon tetiklenmesi için
+                              padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
+                              gridDelegate:
+                                  SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: crossAxisCount,
+                                crossAxisSpacing: 16.0,
+                                mainAxisSpacing: 16.0,
+                                childAspectRatio: childAspectRatio,
+                              ),
+                              itemCount: tableProvider.filteredTables.length,
+                              onReorder: (oldIndex, newIndex) {
+                                if (isGarson) return; 
+                                HapticFeedback.lightImpact();
+                                tableProvider.reorderTables(oldIndex, newIndex);
+                              },
+                              dragWidgetBuilder: (index, child) {
+                                return Material(
+                                  color: Colors.transparent,
+                                  borderRadius: BorderRadius.circular(20),
+                                  clipBehavior: Clip.antiAlias,
+                                  elevation: 10,
+                                  shadowColor: Colors.black.withOpacity(0.25),
+                                  child: child,
+                                );
+                              },
+                              itemBuilder: (context, index) {
+                                final table = tableProvider.filteredTables[index];
+                                return _buildProfessionalTableCard(
+                                    table, viewMode);
+                              },
                             ),
-                            itemCount: tableProvider.filteredTables.length,
-                            onReorder: (oldIndex, newIndex) {
-                              HapticFeedback.lightImpact();
-                              tableProvider.reorderTables(oldIndex, newIndex);
-                            },
-                            itemBuilder: (context, index) {
-                              final table = tableProvider.filteredTables[index];
-                              return _buildProfessionalTableCard(
-                                  table, viewMode);
-                            },
-                          ),
+                  ),
+                ),
               ),
             ],
           );
@@ -440,8 +799,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final Color darkColor = isOccupied ? redDark : greenDark;
 
     if (viewMode == TableViewMode.list) {
-      return Card(
+      return RepaintBoundary(
         key: ValueKey(table.id),
+        child: Card(
         elevation: 4,
         shadowColor: primaryColor.withOpacity(0.2),
         margin: EdgeInsets.zero,
@@ -454,7 +814,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             Navigator.push(
               context,
               MaterialPageRoute(
-                  builder: (context) => TableDetailScreen(tableId: table.id)),
+                  builder: (context) => TableDetailScreen(
+                        tableId: table.id,
+                        loggedInUser: widget.loggedInUser,
+                      )),
             );
           },
           child: Container(
@@ -646,196 +1009,220 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
           ),
         ),
-      );
-    }
+      ),
+    );
+  }
 
-    return Card(
+    return RepaintBoundary(
       key: ValueKey(table.id),
-      elevation: 4,
-      shadowColor: primaryColor.withOpacity(0.2),
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: () {
-          HapticFeedback.selectionClick();
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-                builder: (context) => TableDetailScreen(tableId: table.id)),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          final height = constraints.maxHeight;
+
+          // ÖLÇEKLENDİRME MANTIĞI: Baz genişlik 180px kabul edildi.
+          final scale = (width / 180).clamp(0.65, 1.1);
+          final showCenterIcon = height > 140 && width > 120;
+          final showStatusBadge = width > 100;
+          final isVerySmall = width < 110;
+
+          return Card(
+            elevation: 4,
+            shadowColor: primaryColor.withOpacity(0.2),
+            margin: EdgeInsets.zero,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20 * scale)),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20 * scale),
+              onTap: () {
+                HapticFeedback.selectionClick();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => TableDetailScreen(
+                            tableId: table.id,
+                            loggedInUser: widget.loggedInUser,
+                          )),
+                );
+              },
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20 * scale),
+                  gradient: LinearGradient(
+                    colors: [lightColor, Colors.white],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  border: Border.all(color: darkColor, width: 2),
+                ),
+                padding: EdgeInsets.all(isVerySmall ? 8 : 16 * scale),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        if (showStatusBadge)
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 10 * scale, vertical: 4 * scale),
+                            decoration: BoxDecoration(
+                              color: primaryColor,
+                              borderRadius: BorderRadius.circular(8 * scale),
+                            ),
+                            child: FittedBox(
+                              child: Text(
+                                isOccupied ? 'DOLU' : 'BOŞ',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 10 * scale,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          )
+                        else
+                          // Çok küçükse sadece durum renginde nokta göster
+                          Container(
+                            width: 10,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              color: primaryColor,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        if (!isVerySmall)
+                          InkWell(
+                            onTap: () => _showTableActionBottomSheet(context, table),
+                            borderRadius: BorderRadius.circular(10),
+                            child: Icon(Icons.more_vert_rounded,
+                                color: darkColor, size: 20 * scale),
+                          )
+                      ],
+                    ),
+                    Expanded(
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (showCenterIcon) ...[
+                              Icon(
+                                isOccupied
+                                    ? Icons.restaurant_rounded
+                                    : Icons.table_bar_rounded,
+                                color: darkColor,
+                                size: 40 * scale,
+                              ),
+                              SizedBox(height: 4 * scale),
+                            ],
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                table.name,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 20 * scale,
+                                  fontWeight: FontWeight.bold,
+                                  color: darkColor,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (isOccupied)
+                      Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.all(isVerySmall ? 4 : 10 * scale),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.9),
+                          borderRadius: BorderRadius.circular(12 * scale),
+                          border: Border.all(color: primaryColor.withOpacity(0.2)),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  if (!isVerySmall)
+                                    Icon(Icons.timer_rounded,
+                                        size: 14 * scale, color: darkColor),
+                                  if (!isVerySmall) SizedBox(width: 4 * scale),
+                                  Text(
+                                    elapsedTime,
+                                    style: TextStyle(
+                                      fontSize: 14 * scale,
+                                      color: darkColor,
+                                      fontWeight: FontWeight.bold,
+                                      fontFeatures: const [
+                                        FontFeature.tabularFigures()
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if ((table.totalRevenue) > 0) ...[
+                              SizedBox(height: 4 * scale),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  NumberFormat.currency(locale: 'tr_TR', symbol: '₺')
+                                      .format(table.totalRevenue),
+                                  style: TextStyle(
+                                    fontSize: 15 * scale,
+                                    fontWeight: FontWeight.w900,
+                                    color: darkColor,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures()
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      )
+                    else
+                      Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.symmetric(vertical: isVerySmall ? 4 : 8 * scale),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.9),
+                          borderRadius: BorderRadius.circular(10 * scale),
+                          border: Border.all(color: primaryColor.withOpacity(0.1)),
+                        ),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            'Bekliyor',
+                            style: TextStyle(
+                              fontSize: 16 * scale,
+                              color: darkColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
           );
         },
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            gradient: LinearGradient(
-              colors: [lightColor, Colors.white],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            border: Border.all(color: darkColor, width: 2),
-          ),
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: primaryColor,
-                      borderRadius: BorderRadius.circular(10),
-                      boxShadow: [
-                        BoxShadow(
-                          color: primaryColor.withOpacity(0.3),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Text(
-                      isOccupied ? 'DOLU' : 'BOŞ',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                  ),
-                  InkWell(
-                    onTap: () => _showTableActionBottomSheet(context, table),
-                    borderRadius: BorderRadius.circular(10),
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      child: Icon(Icons.more_vert_rounded,
-                          color: darkColor, size: 24),
-                    ),
-                  )
-                ],
-              ),
-              Expanded(
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        isOccupied
-                            ? Icons.restaurant_rounded
-                            : Icons.table_bar_rounded,
-                        color: darkColor,
-                        size: 48,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        table.name,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: darkColor,
-                          letterSpacing: 0.5,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              if (isOccupied)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: primaryColor.withOpacity(0.3)),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.timer_rounded, size: 18, color: darkColor),
-                          const SizedBox(width: 6),
-                          Text(
-                            elapsedTime,
-                            style: TextStyle(
-                              fontSize: 18,
-                              color: darkColor,
-                              fontWeight: FontWeight.bold,
-                              fontFeatures: const [
-                                FontFeature.tabularFigures()
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      if ((table.totalRevenue) > 0) ...[
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: primaryColor.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            NumberFormat.currency(locale: 'tr_TR', symbol: '₺')
-                                .format(table.totalRevenue),
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: darkColor,
-                              fontFeatures: const [
-                                FontFeature.tabularFigures()
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                )
-              else
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: primaryColor.withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.hourglass_empty_rounded,
-                          size: 18, color: darkColor),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Bekliyor',
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: darkColor,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        ),
       ),
     );
   }
 
   Widget _buildShimmerEffect(
-      int crossAxisCount, double childAspectRatio, TableViewMode viewMode) {
+      int crossAxisCount, double childAspectRatio, TableViewMode viewMode, {Key? key}) {
     return Shimmer.fromColors(
+      key: key,
       baseColor: Colors.grey[200]!,
       highlightColor: Colors.grey[100]!,
       child: GridView.builder(
@@ -1368,153 +1755,200 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   void _showAddEditTableDialog({TableModel? table}) {
     _tableController.text = table?.name ?? '';
+    final tableProvider = Provider.of<TableProvider>(context, listen: false);
+
+    // Başlangıç bölgesi: Masanın bölgesi veya aktif olan bölge
+    String? tempSectionId = table?.sectionId ?? tableProvider.selectedSectionId;
+    if (tempSectionId == null && tableProvider.sections.isNotEmpty) {
+      tempSectionId = tableProvider.sections.first['id'];
+    }
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) {
-        return Dialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          elevation: 8,
-          child: Container(
-            padding: const EdgeInsets.all(28),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: table == null
-                          ? [Colors.green.shade400, Colors.green.shade600]
-                          : [Colors.blue.shade400, Colors.blue.shade600],
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: (table == null ? Colors.green : Colors.blue)
-                            .withOpacity(0.3),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Icon(
-                      table == null
-                          ? Icons.add_business_rounded
-                          : Icons.edit_rounded,
-                      size: 58,
-                      color: Colors.white),
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  table == null ? 'Yeni Masa Ekle' : 'Masa Düzenle',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 26,
-                      color: Color(0xFF1A1A2E)),
-                ),
-                const SizedBox(height: 28),
-                TextField(
-                  controller: _tableController,
-                  autofocus: true,
-                  style: const TextStyle(
-                      fontSize: 19, fontWeight: FontWeight.w600),
-                  decoration: InputDecoration(
-                    labelText: 'Masa Adı',
-                    labelStyle: TextStyle(
-                        color: Colors.grey[700],
-                        fontSize: 17,
-                        fontWeight: FontWeight.w600),
-                    hintText: 'Örn: Bahçe 1',
-                    hintStyle: TextStyle(color: Colors.grey[400]),
-                    prefixIcon: Icon(Icons.table_restaurant_rounded,
-                        size: 26, color: Colors.grey[700]),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide:
-                          BorderSide(color: Colors.grey[300]!, width: 2),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide:
-                          BorderSide(color: Colors.grey[300]!, width: 2),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide:
-                          BorderSide(color: Colors.blue.shade600, width: 2),
-                    ),
-                    filled: true,
-                    fillColor: Colors.grey[50],
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 18),
-                  ),
-                ),
-                const SizedBox(height: 28),
-                Row(
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24)),
+              elevation: 8,
+              child: Container(
+                padding: const EdgeInsets.all(28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(
-                      child: TextButton(
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                          _tableController.clear();
-                        },
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          textStyle: const TextStyle(
-                              fontSize: 17, fontWeight: FontWeight.w600),
+                    Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: table == null
+                              ? [Colors.green.shade400, Colors.green.shade600]
+                              : [Colors.blue.shade400, Colors.blue.shade600],
                         ),
-                        child: const Text('İptal'),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: (table == null ? Colors.green : Colors.blue)
+                                .withOpacity(0.3),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                          table == null
+                              ? Icons.add_business_rounded
+                              : Icons.edit_rounded,
+                          size: 58,
+                          color: Colors.white),
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      table == null ? 'Yeni Masa Ekle' : 'Masa Düzenle',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 26,
+                          color: Color(0xFF1A1A2E)),
+                    ),
+                    const SizedBox(height: 24),
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text("Masanın Bölgesi",
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, color: Colors.grey)),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: tempSectionId,
+                          isExpanded: true,
+                          hint: const Text("Bölge Seçin"),
+                          items: tableProvider.sections.map((sec) {
+                            return DropdownMenuItem<String>(
+                              value: sec['id'],
+                              child: Text(sec['name']),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            setDialogState(() {
+                              tempSectionId = val;
+                            });
+                          },
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () {
-                          if (_tableController.text.isNotEmpty) {
-                            if (table == null) {
-                              Provider.of<TableProvider>(context, listen: false)
-                                  .addTable(
-                                TableModel(
-                                    id: const Uuid().v4(),
-                                    name: _tableController.text,
-                                    position: 0),
-                              );
-                            } else {
-                              table.name = _tableController.text;
-                              Provider.of<TableProvider>(context, listen: false)
-                                  .updateTable(table);
-                            }
-                            Navigator.of(context).pop();
-                            _tableController.clear();
-                            _showSnackBar(
-                                table == null
-                                    ? 'Masa başarıyla eklendi'
-                                    : 'Masa güncellendi',
-                                isSuccess: true);
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: table == null
-                              ? Colors.green.shade600
-                              : Colors.blue.shade600,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16)),
-                          textStyle: const TextStyle(
-                              fontSize: 17, fontWeight: FontWeight.bold),
-                          elevation: 4,
+                    const SizedBox(height: 28),
+                    TextField(
+                      controller: _tableController,
+                      autofocus: true,
+                      style: const TextStyle(
+                          fontSize: 19, fontWeight: FontWeight.w600),
+                      decoration: InputDecoration(
+                        labelText: 'Masa Adı',
+                        labelStyle: TextStyle(
+                            color: Colors.grey[700],
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600),
+                        hintText: 'Örn: Bahçe 1',
+                        hintStyle: TextStyle(color: Colors.grey[400]),
+                        prefixIcon: Icon(Icons.table_restaurant_rounded,
+                            size: 26, color: Colors.grey[700]),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide:
+                              BorderSide(color: Colors.grey[300]!, width: 2),
                         ),
-                        child: Text(table == null ? 'Ekle' : 'Güncelle'),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide:
+                              BorderSide(color: Colors.grey[300]!, width: 2),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide:
+                              BorderSide(color: Colors.blue.shade600, width: 2),
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey[50],
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 18),
                       ),
+                    ),
+                    const SizedBox(height: 28),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              _tableController.clear();
+                            },
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              textStyle: const TextStyle(
+                                  fontSize: 17, fontWeight: FontWeight.w600),
+                            ),
+                            child: const Text('İptal'),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () {
+                              if (_tableController.text.isNotEmpty) {
+                                if (table == null) {
+                                  tableProvider.addTable(
+                                    TableModel(
+                                      id: const Uuid().v4(),
+                                      name: _tableController.text,
+                                      position: 0,
+                                      sectionId: tempSectionId,
+                                    ),
+                                  );
+                                } else {
+                                  table.name = _tableController.text;
+                                  table.sectionId = tempSectionId;
+                                  tableProvider.updateTable(table);
+                                }
+                                Navigator.of(context).pop();
+                                _tableController.clear();
+                                _showSnackBar(
+                                    table == null
+                                        ? 'Masa başarıyla eklendi'
+                                        : 'Masa güncellendi',
+                                    isSuccess: true);
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: table == null
+                                  ? Colors.green.shade600
+                                  : Colors.blue.shade600,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16)),
+                              textStyle: const TextStyle(
+                                  fontSize: 17, fontWeight: FontWeight.bold),
+                              elevation: 4,
+                            ),
+                            child: Text(table == null ? 'Ekle' : 'Güncelle'),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -1626,7 +2060,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                     size: 20, color: destPrimary),
                                 onTap: () {
                                   tableProvider.moveTableData(
-                                      sourceTable, destTable);
+                                      sourceTable, destTable,
+                                      user: widget.loggedInUser);
                                   Navigator.of(context).pop();
                                   _showSnackBar(
                                       '${sourceTable.name} masası ${destTable.name} masasına taşındı.',
@@ -1687,47 +2122,52 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildEmptyState(String currentFilter) {
+  Widget _buildEmptyState(String currentFilter, {Key? key}) {
     final bool isAll = currentFilter == 'Tüm Masalar';
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(32),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              shape: BoxShape.circle,
+      key: key,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                isAll ? Icons.restaurant_menu_rounded : Icons.search_off_rounded,
+                size: 56,
+                color: Colors.grey[400],
+              ),
             ),
-            child: Icon(
-              isAll ? Icons.restaurant_menu_rounded : Icons.search_off_rounded,
-              size: 96,
-              color: Colors.grey[400],
+            const SizedBox(height: 16),
+            Text(
+              isAll
+                  ? 'Henüz masa eklenmedi'
+                  : 'Gösterilecek masa bulunmamaktadır',
+              style: TextStyle(
+                  fontSize: 18,
+                  color: Colors.grey[700],
+                  fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
             ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            isAll
-                ? 'Henüz masa eklenmedi'
-                : 'Gösterilecek masa bulunmamaktadır',
-            style: TextStyle(
-                fontSize: 24,
-                color: Colors.grey[700],
-                fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            isAll
-                ? 'Yeni masa eklemek için + ikonuna tıklayın'
-                : 'Farklı bir filtre seçmeyi deneyin',
-            style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[500],
-                fontWeight: FontWeight.w500),
-            textAlign: TextAlign.center,
-          ),
-        ],
+            const SizedBox(height: 8),
+            Text(
+              isAll
+                  ? 'Yeni masa eklemek için + ikonuna tıklayın'
+                  : 'Farklı bir filtre seçmeyi deneyin',
+              style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[500],
+                  fontWeight: FontWeight.w500),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1738,82 +2178,185 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.42,
-          minChildSize: 0.2,
-          maxChildSize: 0.95,
-          expand: false,
-          builder: (_, controller) {
-            return Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(28),
-                    topRight: Radius.circular(28)),
-              ),
-              child: SafeArea(
-                child: SingleChildScrollView(
-                  controller: controller,
-                  padding: const EdgeInsets.only(bottom: 20),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 50,
-                        height: 5,
-                        margin: const EdgeInsets.symmetric(vertical: 14),
-                        decoration: BoxDecoration(
-                            color: Colors.grey[300],
-                            borderRadius: BorderRadius.circular(3)),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(table.name,
-                                style: const TextStyle(
-                                    fontSize: 28,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF1A1A2E))),
-                            const SizedBox(height: 28),
-                            _buildActionTile(
-                              icon: Icons.edit_rounded,
-                              title: 'Düzenle',
-                              subtitle: 'Masa adını değiştir',
-                              color: Colors.blue.shade600,
-                              onTap: () {
-                                Navigator.pop(context);
-                                _showAddEditTableDialog(table: table);
-                              },
-                            ),
-                            _buildActionTile(
-                              icon: Icons.swap_horiz_rounded,
-                              title: 'Masayı Taşı',
-                              subtitle: 'Veriyi başka masaya aktar',
-                              color: Colors.orange.shade600,
-                              onTap: () {
-                                Navigator.pop(context);
-                                _showMoveTableDialog(table);
-                              },
-                            ),
-                            _buildActionTile(
-                              icon: Icons.delete_rounded,
-                              title: 'Sil',
-                              subtitle: 'Masayı kalıcı olarak sil',
-                              color: Colors.red.shade600,
-                              onTap: () {
-                                Navigator.pop(context);
-                                _showDeleteConfirmationDialog(context, table);
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+        return Consumer<TableProvider>(
+          builder: (context, provider, child) {
+            final currentTable = provider.tables.firstWhere((t) => t.id == table.id, orElse: () => table);
+            final hasOrders = currentTable.isOccupied && currentTable.orders.isNotEmpty;
+
+            return DraggableScrollableSheet(
+              initialChildSize: hasOrders ? 0.65 : 0.42,
+              minChildSize: 0.2,
+              maxChildSize: 0.95,
+              expand: false,
+              builder: (_, controller) {
+                return Container(
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(28),
+                        topRight: Radius.circular(28)),
                   ),
-                ),
-              ),
+                  child: SafeArea(
+                    child: SingleChildScrollView(
+                      controller: controller,
+                      padding: const EdgeInsets.only(bottom: 20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 50,
+                            height: 5,
+                            margin: const EdgeInsets.symmetric(vertical: 14),
+                            decoration: BoxDecoration(
+                                color: Colors.grey[300],
+                                borderRadius: BorderRadius.circular(3)),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(currentTable.name,
+                                    style: const TextStyle(
+                                        fontSize: 28,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF1A1A2E))),
+                                const SizedBox(height: 28),
+                                _buildActionTile(
+                                  icon: Icons.edit_rounded,
+                                  title: 'Düzenle',
+                                  subtitle: 'Masa adını değiştir',
+                                  color: Colors.blue.shade600,
+                                  onTap: () {
+                                    Navigator.pop(context);
+                                    _showAddEditTableDialog(table: currentTable);
+                                  },
+                                ),
+                                _buildActionTile(
+                                  icon: Icons.swap_horiz_rounded,
+                                  title: 'Masayı Taşı',
+                                  subtitle: 'Veriyi başka masaya aktar',
+                                  color: Colors.orange.shade600,
+                                  onTap: () {
+                                    Navigator.pop(context);
+                                    _showMoveTableDialog(currentTable);
+                                  },
+                                ),
+                                _buildActionTile(
+                                  icon: Icons.delete_rounded,
+                                  title: 'Sil',
+                                  subtitle: 'Masayı kalıcı olarak sil',
+                                  color: Colors.red.shade600,
+                                  onTap: () {
+                                    Navigator.pop(context);
+                                    _showDeleteConfirmationDialog(context, currentTable);
+                                  },
+                                ),
+                                if (hasOrders) ...[
+                                  const Divider(height: 32, thickness: 1),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text(
+                                        'Aktif Siparişler',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF1A1A2E),
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red.shade50,
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          'Toplam: ${NumberFormat.currency(locale: 'tr_TR', symbol: '₺').format(currentTable.totalRevenue)}',
+                                          style: TextStyle(
+                                            color: Colors.red.shade700,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  ListView.separated(
+                                    shrinkWrap: true,
+                                    physics: const NeverScrollableScrollPhysics(),
+                                    itemCount: currentTable.orders.length,
+                                    separatorBuilder: (context, index) => Divider(color: Colors.grey.shade200, height: 1),
+                                    itemBuilder: (context, index) {
+                                      final orderItem = currentTable.orders[index];
+                                      final double itemTotal = orderItem.productPrice * orderItem.quantity;
+                                      return Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 10),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: Colors.grey.shade100,
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                '${orderItem.quantity}x',
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.grey.shade700,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Text(
+                                                orderItem.productName,
+                                                style: const TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: Color(0xFF1A1A2E),
+                                                ),
+                                              ),
+                                            ),
+                                            Column(
+                                              crossAxisAlignment: CrossAxisAlignment.end,
+                                              children: [
+                                                Text(
+                                                  NumberFormat.currency(locale: 'tr_TR', symbol: '₺').format(itemTotal),
+                                                  style: const TextStyle(
+                                                    fontSize: 15,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Color(0xFF1A1A2E),
+                                                  ),
+                                                ),
+                                                if (orderItem.quantity > 1)
+                                                  Text(
+                                                    '${NumberFormat.currency(locale: 'tr_TR', symbol: '₺').format(orderItem.productPrice)} / adet',
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      color: Colors.grey.shade500,
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
             );
           },
         );
@@ -1925,7 +2468,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
               onPressed: () {
                 Provider.of<TableProvider>(context, listen: false)
-                    .deleteTable(table.id);
+                    .deleteTable(table.id, user: widget.loggedInUser);
                 Navigator.of(context).pop();
                 _showSnackBar('${table.name} masası kalıcı olarak silindi.');
               },
@@ -1937,28 +2480,298 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildAppBarAction(
+   Widget _buildAppBarAction(
       IconData icon, String tooltip, Color color, VoidCallback onPressed) {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [color.withOpacity(0.1), color.withOpacity(0.05)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+      child: Tooltip(
+        message: tooltip,
+        waitDuration: const Duration(milliseconds: 400),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              onPressed();
+            },
+            borderRadius: BorderRadius.circular(14),
+            splashColor: color.withOpacity(0.2),
+            highlightColor: color.withOpacity(0.1),
+            child: Ink(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [color.withOpacity(0.12), color.withOpacity(0.05)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: color.withOpacity(0.35), width: 1.5),
+              ),
+              child: Center(
+                child: Icon(icon, size: 24, color: color),
+              ),
+            ),
+          ),
         ),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.3), width: 1.5),
       ),
-      child: IconButton(
-        icon: Icon(icon, size: 26, color: color),
-        style: IconButton.styleFrom(backgroundColor: Colors.transparent),
-        tooltip: tooltip,
-        onPressed: () {
-          HapticFeedback.lightImpact();
-          onPressed();
+    );
+  }
+
+  Widget _buildSectionTabs(TableProvider provider) {
+    final bool isAdmin = widget.loggedInUser['userRole'] != 'Garson';
+    if (provider.sections.isEmpty && !isAdmin) return const SizedBox.shrink();
+
+    return Container(
+      height: 38,
+      margin: const EdgeInsets.only(bottom: 0),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white, // AppBar ile bütünleşmesi için beyaz yapıldı
+        border: Border(bottom: BorderSide(color: Colors.grey.shade300, width: 1)),
+      ),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: provider.sections.length + (widget.loggedInUser['userRole'] != 'Garson' ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index == provider.sections.length) {
+            // Chrome Stili "+" Butonu
+            return Center(
+              child: Container(
+                margin: const EdgeInsets.only(left: 4),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      _showSectionManagementDialog();
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(Icons.add_rounded, color: Colors.blue.shade700, size: 20),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }
+
+          final section = provider.sections[index];
+          final isSelected = provider.selectedSectionId == section['id'];
+          
+          return GestureDetector(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              provider.setSelectedSection(section['id']);
+            },
+            onLongPress: () {
+              if (widget.loggedInUser['userRole'] != 'Garson') {
+                _showSectionManagementDialog();
+              }
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              margin: const EdgeInsets.only(right: 4),
+              width: 120, // SABİT GENİŞLİK
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: isSelected ? Colors.blue.shade600 : Colors.grey.shade200,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
+                ),
+              ),
+              alignment: Alignment.center,
+              child: section['name'].toString().length > 12 // Yaklaşık sınır
+                  ? SizedBox(
+                      height: 20,
+                      child: RepaintBoundary(
+                        child: Marquee(
+                          text: section['name'],
+                          style: TextStyle(
+                            color: isSelected ? Colors.white : Colors.black87,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                            fontSize: 14,
+                          ),
+                          scrollAxis: Axis.horizontal,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          blankSpace: 20.0,
+                          velocity: 25.0, // Daha iyi okunabilirlik için hafifçe yavaşlatıldı
+                          pauseAfterRound: const Duration(seconds: 1),
+                          startPadding: 10.0,
+                          // Performans için ivmelenme efektleri kaldırıldı
+                          accelerationDuration: Duration.zero,
+                          decelerationDuration: Duration.zero,
+                        ),
+                      ),
+                    )
+                  : Text(
+                      section['name'],
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: isSelected ? Colors.white : Colors.black87,
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                        fontSize: 14,
+                      ),
+                    ),
+            ),
+          );
         },
       ),
+    );
+  }
+
+  void _showSectionManagementDialog() {
+    final provider = Provider.of<TableProvider>(context, listen: false);
+    final controller = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return _buildCustomDialog(
+              icon: Icons.layers_rounded,
+              iconColor: Colors.blue,
+              title: 'Bölgeleri Yönet',
+              content: [
+                const Text("Bahçe, Salon gibi bölümler ekleyerek masalarınızı ayırabilirsiniz.", textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, fontSize: 13)),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildStyledTextField(
+                        controller: controller,
+                        labelText: 'Yeni Bölge Adı',
+                        icon: Icons.add,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add_circle, color: Colors.blue, size: 32),
+                      onPressed: () async {
+                        if (controller.text.isNotEmpty) {
+                          await provider.addSection(controller.text);
+                          controller.clear();
+                          setDialogState(() {});
+                        }
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Divider(),
+                SizedBox(
+                  height: 200,
+                  width: double.maxFinite,
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: provider.sections.length,
+                    itemBuilder: (context, index) {
+                      final section = provider.sections[index];
+                      return ListTile(
+                        title: Text(section['name']),
+                        trailing: section['id'] == 'default_section' 
+                          ? null 
+                          : IconButton(
+                              icon: const Icon(Icons.delete_outline, color: Colors.red),
+                              onPressed: () async {
+                                await provider.deleteSection(section['id']);
+                                setDialogState(() {});
+                              },
+                            ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+              actions: [
+                Expanded(child: ElevatedButton(onPressed: () => Navigator.pop(context), style: _getButtonStyle(Colors.blue), child: const Text("Kapat")))
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildCustomDialog({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required List<Widget> content,
+    required List<Widget> actions,
+  }) {
+    // Note: This is a duplicate of SettingsScreen logic, but used here for consistency.
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 48, color: iconColor),
+              const SizedBox(height: 20),
+              Text(title,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 24)),
+              const SizedBox(height: 16),
+              ...content,
+              const SizedBox(height: 24),
+              Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: actions),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  ButtonStyle _getButtonStyle(Color color) {
+    return ElevatedButton.styleFrom(
+      backgroundColor: color,
+      foregroundColor: Colors.white,
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 0,
+    );
+  }
+
+  Widget _buildStyledTextField({
+    required TextEditingController controller,
+    required String labelText,
+    required IconData icon,
+    bool obscureText = false,
+    String? Function(String?)? validator,
+    bool readOnly = false,
+  }) {
+    return TextFormField(
+      controller: controller,
+      obscureText: obscureText,
+      validator: validator,
+      readOnly: readOnly,
+      decoration: InputDecoration(
+        labelText: labelText,
+        prefixIcon: Icon(icon),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+        filled: true,
+        fillColor: readOnly ? Colors.grey.shade200 : Colors.grey.shade50,
+      ),
+    );
+  }
+
+  void _showLogsScreen() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const LogsScreen()),
     );
   }
 }

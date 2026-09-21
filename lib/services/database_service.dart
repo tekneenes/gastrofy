@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
+import 'firebase_service.dart';
+import 'database_helper.dart';
 
 /// Bu servis, Yönetici ve ÇOKLU Personel hesaplarını yönetir.
 class DatabaseService {
@@ -37,6 +40,12 @@ class DatabaseService {
     required String userRole,
     String? userFaceImage,
     required String termsAcceptedOn,
+    String? deviceId,
+    String? status,
+    String? licenseStatus,
+    String? address,
+    String? companyPhone,
+    String? taxNumber,
   }) async {
     await _secureStorage.write(key: 'companyName', value: companyName);
     await _secureStorage.write(key: 'userName', value: userName);
@@ -46,6 +55,26 @@ class DatabaseService {
     await _secureStorage.write(key: 'quickLoginPin', value: quickLoginPin);
     await _secureStorage.write(key: 'userRole', value: userRole);
     await _secureStorage.write(key: 'termsAcceptedOn', value: termsAcceptedOn);
+
+    if (address != null) {
+      await _secureStorage.write(key: 'address', value: address);
+    }
+    if (companyPhone != null) {
+      await _secureStorage.write(key: 'companyPhone', value: companyPhone);
+    }
+    if (taxNumber != null) {
+      await _secureStorage.write(key: 'taxNumber', value: taxNumber);
+    }
+
+    if (deviceId != null) {
+      await _secureStorage.write(key: 'deviceId', value: deviceId);
+    }
+    if (status != null) {
+      await _secureStorage.write(key: 'status', value: status);
+    }
+    if (licenseStatus != null) {
+      await _secureStorage.write(key: 'licenseStatus', value: licenseStatus);
+    }
 
     if (userFaceImage != null) {
       await _secureStorage.write(key: 'userFaceImage', value: userFaceImage);
@@ -81,11 +110,7 @@ class DatabaseService {
   }
 
   /// Yönetici verilerini günceller (Sadece ana hesap)
-  Future<void> updateUserData(Map<String, dynamic> updatedUser,
-      {required userContact,
-      required String companyName,
-      required String userName,
-      required String userEmail}) async {
+  Future<void> updateUserData(Map<String, dynamic> updatedUser) async {
     for (var entry in updatedUser.entries) {
       if (entry.key.isNotEmpty && entry.value != null) {
         // Eğer güncellenen veri personel listesi değilse ana storage'a yaz
@@ -115,11 +140,141 @@ class DatabaseService {
   }
 
   Future<void> clearAllData() async {
+    // 1. Firebase oturumunu kapat
+    await FirebaseService.instance.signOut();
+
+    // 2. Güvenli depolamayı temizle (Şifreler, PIN'ler vb.)
     await _secureStorage.deleteAll();
+    
+    // 3. SharedPreferences'ı KÖKTEN temizle
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_isRegisteredKey);
-    await prefs.remove(_verificationCodeKey);
-    await prefs.remove(_adminExistsKey);
+    await prefs.clear(); // Tek bir anahtar değil, TÜM ayarları temizle
+    
+    // 4. SQLite veritabanını da fiziksel olarak temizle
+    await DatabaseHelper.instance.clearDatabase();
+    
+    debugPrint("Tüm yerel veriler ve oturumlar temizlendi.");
+  }
+
+  Future<void> restoreAllData(Map<String, String> data) async {
+    await clearAllData();
+    for (var entry in data.entries) {
+      await _secureStorage.write(key: entry.key, value: entry.value);
+    }
+    
+    // Admin ve Register flaglerini kontrol et
+    if (data.containsKey('userRole') && data['userRole'] == 'Yönetici') {
+       final prefs = await SharedPreferences.getInstance();
+       await prefs.setBool(_adminExistsKey, true);
+    }
+    // Veri yüklendiyse kayıtlı sayılır
+    await _setRegistered(true);
+  }
+
+  // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // LİSANS CACHE VE CİHAZ DENEME YÖNETİMİ
+  // ---------------------------------------------------------------------------
+
+  /// Cihazın daha önce 7 günlük deneme sürümünü kullanıp kullanmadığını kontrol eder.
+  Future<bool> hasDeviceUsedTrial() async {
+    final used = await _secureStorage.read(key: 'deviceTrialUsed');
+    return used == 'true';
+  }
+
+  /// Cihazın 7 günlük deneme sürümünü kullandığını mühürler.
+  Future<void> markDeviceTrialUsed(DateTime expiry) async {
+    await _secureStorage.write(key: 'deviceTrialUsed', value: 'true');
+    await _secureStorage.write(key: 'deviceTrialExpiry', value: expiry.toIso8601String());
+    await saveLicenseCache(expiry, 'active', planName: 'Ücretsiz Deneme');
+  }
+
+  /// Lisans bilgilerini yerel hafızaya kaydeder.
+  Future<void> saveLicenseCache(DateTime expiry, String status, {String? planName}) async {
+    await _secureStorage.write(key: 'cachedExpiry', value: expiry.toIso8601String());
+    await _secureStorage.write(key: 'cachedLicenseStatus', value: status);
+    if (planName != null) {
+      await _secureStorage.write(key: 'cachedPlanName', value: planName);
+    }
+    await _secureStorage.write(key: 'lastLicenseCheck', value: DateTime.now().toIso8601String());
+  }
+
+  /// Yerel hafızadaki lisans bilgilerini okur.
+  Future<Map<String, String?>> readLicenseCache() async {
+    return {
+      'expiry': await _secureStorage.read(key: 'cachedExpiry'),
+      'status': await _secureStorage.read(key: 'cachedLicenseStatus'),
+      'planName': await _secureStorage.read(key: 'cachedPlanName'),
+      'lastCheck': await _secureStorage.read(key: 'lastLicenseCheck'),
+      'deviceTrialUsed': await _secureStorage.read(key: 'deviceTrialUsed'),
+    };
+  }
+
+  /// Lisans süresi ve kalan zamanı matematiksel ve hassas olarak hesaplar.
+  Future<Map<String, dynamic>> getLicenseRemainingInfo() async {
+    final cache = await readLicenseCache();
+    String planName = cache['planName'] ?? 'Ücretsiz Deneme';
+    String status = cache['status'] ?? 'active';
+    String? expiryStr = cache['expiry'];
+
+    if (expiryStr == null || expiryStr.isEmpty) {
+      return {
+        'planName': planName,
+        'status': status,
+        'isExpired': false,
+        'daysLeft': 7,
+        'formatted': '7 gün deneme',
+        'expiryDate': null,
+      };
+    }
+
+    final DateTime? expiryDate = DateTime.tryParse(expiryStr);
+    if (expiryDate == null) {
+      return {
+        'planName': planName,
+        'status': status,
+        'isExpired': false,
+        'daysLeft': 0,
+        'formatted': 'Belirsiz',
+        'expiryDate': null,
+      };
+    }
+
+    final now = DateTime.now();
+    if (expiryDate.isBefore(now)) {
+      return {
+        'planName': planName,
+        'status': 'expired',
+        'isExpired': true,
+        'daysLeft': 0,
+        'hoursLeft': 0,
+        'formatted': 'Süresi doldu',
+        'expiryDate': expiryDate,
+      };
+    }
+
+    final difference = expiryDate.difference(now);
+    final int days = difference.inDays;
+    final int hours = difference.inHours;
+
+    String formattedText;
+    if (days >= 1) {
+      formattedText = '$days gün kaldı';
+    } else if (hours >= 1) {
+      formattedText = '$hours saat kaldı (Bugün bitiyor)';
+    } else {
+      formattedText = 'Son 1 saat içinde sona eriyor';
+    }
+
+    return {
+      'planName': planName,
+      'status': status,
+      'isExpired': false,
+      'daysLeft': days,
+      'hoursLeft': hours,
+      'formatted': formattedText,
+      'expiryDate': expiryDate,
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -167,13 +322,30 @@ class DatabaseService {
 
     list.add(newStaff);
     await _saveStaffList(list);
+
+    // Cloud Sync
+    final String? companyEmail = await readValue('userEmail');
+    if (companyEmail != null) {
+      await FirebaseService.instance.syncStaffMember(companyEmail, newStaff);
+    }
   }
 
   /// 3. Personel Sil (ID'ye göre)
   Future<void> deleteUser(int id) async {
     final list = await _getStaffList();
+    final staffToDelete = list.firstWhere((e) => e['id'] == id, orElse: () => {});
+    
     list.removeWhere((element) => element['id'] == id);
     await _saveStaffList(list);
+
+    // Cloud Sync
+    if (staffToDelete.isNotEmpty) {
+      final String? companyEmail = await readValue('userEmail');
+      final String? staffEmail = staffToDelete['userEmail'];
+      if (companyEmail != null && staffEmail != null) {
+        await FirebaseService.instance.deleteStaffMemberFromCloud(companyEmail, staffEmail);
+      }
+    }
   }
 
   /// 4. Personel Güncelle (ID'ye göre)
@@ -188,6 +360,12 @@ class DatabaseService {
       updated['id'] = id;
       list[index] = updated;
       await _saveStaffList(list);
+
+      // Cloud Sync
+      final String? companyEmail = await readValue('userEmail');
+      if (companyEmail != null) {
+        await FirebaseService.instance.syncStaffMember(companyEmail, updated);
+      }
     }
   }
 

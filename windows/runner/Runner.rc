@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "altin_tepsi_masa_takip" "\0"
+            VALUE "FileDescription", "Gastrofy" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "altin_tepsi_masa_takip" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2025 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "altin_tepsi_masa_takip.exe" "\0"
-            VALUE "ProductName", "altin_tepsi_masa_takip" "\0"
+            VALUE "InternalName", "Gastrofy" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2024 com.gastromind. All rights reserved." "\0"
+            VALUE "OriginalFilename", "gastrofy.exe" "\0"
+            VALUE "ProductName", "Gastrofy" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

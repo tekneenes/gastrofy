@@ -1,4 +1,4 @@
-package com.example.altin_tepsi_masa_takip
+package com.gastromind
 
 import io.flutter.embedding.android.FlutterActivity
 

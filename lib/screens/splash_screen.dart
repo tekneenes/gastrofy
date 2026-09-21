@@ -1,8 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:animated_text_kit/animated_text_kit.dart';
-import 'package:video_player/video_player.dart';
 import 'login_screen.dart';
+import 'onboarding_screen.dart';
 import '../services/database_service.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -12,168 +11,221 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   final _dbService = DatabaseService();
-  late VideoPlayerController _videoController;
-  bool _isVideoInitialized = false;
+  late AnimationController _animController;
+  late Animation<double> _fadeAnimation;
+  late Animation<double> _scaleAnimation;
 
   @override
   void initState() {
     super.initState();
-    _initializeVideo();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+
+    _fadeAnimation = CurvedAnimation(
+      parent: _animController,
+      curve: Curves.easeOut,
+    );
+
+    _scaleAnimation = Tween<double>(begin: 0.85, end: 1.0).animate(
+      CurvedAnimation(parent: _animController, curve: Curves.easeOutBack),
+    );
+
+    _animController.forward();
     _loadDataAndNavigate();
   }
 
-  void _initializeVideo() {
-    // Video dosyasının assets/splash_video.mp4 yolunda olduğunu varsayıyoruz
-    // pubspec.yaml dosyasına bu asset'i eklemeyi unutmayın
-    _videoController = VideoPlayerController.asset('assets/splash_video.mp4')
-      ..initialize().then((_) {
-        // Video yüklendiğinde oynat, döngüye al ve sessize al
-        _videoController.play();
-        _videoController.setLooping(true);
-        _videoController.setVolume(0.0);
-        if (mounted) {
-          setState(() {
-            _isVideoInitialized = true;
-          });
-        }
-      }).catchError((error) {
-        debugPrint("Video yükleme hatası: $error");
-      });
+  @override
+  void dispose() {
+    _animController.dispose();
+    super.dispose();
   }
 
-  /// Gerekli verileri yükler ve ardından LoginScreen'e yönlendirir.
   Future<void> _loadDataAndNavigate() async {
-    // Splash ekranının en az 3 saniye görünmesini sağla
-    await Future.delayed(const Duration(seconds: 6));
+    // Splash ekranının en az 2.5 saniye görünmesini sağla
+    await Future.delayed(const Duration(milliseconds: 2500));
 
     // Veritabanı kontrollerini yap
     final allUsers = await _dbService.getAllUsers();
     final adminExists = await _dbService.hasAdmin();
 
-    // Widget'ın hala ekranda olduğundan emin ol
     if (mounted) {
-      // Verileri yükleyerek LoginScreen'e git
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (context) => LoginScreen(
-            allUsers: allUsers,
-            adminExists: adminExists,
+      if (allUsers.isEmpty) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => OnboardingScreen(
+              allUsers: allUsers,
+              adminExists: adminExists,
+            ),
           ),
-        ),
-      );
+        );
+      } else {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => LoginScreen(
+              allUsers: allUsers,
+              adminExists: adminExists,
+            ),
+          ),
+        );
+      }
     }
   }
 
   @override
-  void dispose() {
-    _videoController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final screenHeight = MediaQuery.of(context).size.height;
-    final screenWidth = MediaQuery.of(context).size.width;
-
     return Scaffold(
-      backgroundColor: Colors.black, // Normal arka plan siyah
-      body: Stack(
-        children: [
-          // 1. KATMAN: Video Arka Planı
-          if (_isVideoInitialized)
-            SizedBox.expand(
-              child: FittedBox(
-                fit: BoxFit.cover,
-                child: SizedBox(
-                  width: _videoController.value.size.width,
-                  height: _videoController.value.size.height,
-                  child: VideoPlayer(_videoController),
-                ),
-              ),
-            )
-          else
-            Container(color: Colors.black), // Video yüklenene kadar siyah ekran
-
-          // 2. KATMAN: Hafif Karartma (Overlay)
-          // Videonun çok parlak olması durumunda yazıların okunmasını sağlar
-          Container(
-            color: Colors.black.withOpacity(0.3),
-          ),
-
-          // 3. KATMAN: İçerik (Logo ve Yazılar)
-          // Logo ve Yükleniyor... yazısı
-
-          // Geliştirici Bilgisi
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 600),
-            curve: Curves.easeInOut,
-            bottom: 40,
-            left: 0,
-            right: 0,
-            child: _buildDeveloperInfo(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Geliştirici bilgisi widget'ı
-  Widget _buildDeveloperInfo() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        // Logo karanlık modda daha iyi görünsün diye hafif bir kapsayıcı eklenebilir
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Image.asset(
-            'assets/metsoft.png',
-            height: 80,
-            errorBuilder: (context, error, stackTrace) =>
-                const Icon(Icons.code, size: 40, color: Colors.white),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Color(0xFF53736B),
+              Color(0xFF384E48),
+              Color(0xFF23332F),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
         ),
-        const SizedBox(height: 10),
-        const Text(
-          'Metsoft Yazılım',
-          style: TextStyle(
-            fontFamily: 'Montserrat',
-            color: Colors.white, // Beyaz yazı
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-            shadows: [
-              Shadow(
-                blurRadius: 3.0,
-                color: Colors.black,
-                offset: Offset(0, 1),
+        child: SafeArea(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Spacer(flex: 2),
+
+              // Logo ve Marka Yazısı Animasyon Alanı
+              FadeTransition(
+                opacity: _fadeAnimation,
+                child: ScaleTransition(
+                  scale: _scaleAnimation,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Logo Kutusu
+                      Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withOpacity(0.12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              blurRadius: 30,
+                              offset: const Offset(0, 10),
+                            ),
+                          ],
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.25),
+                            width: 2,
+                          ),
+                        ),
+                        child: ClipOval(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Image.asset(
+                              'assets/gastrofy.png',
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  const Icon(
+                                Icons.restaurant_rounded,
+                                size: 54,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+
+                      // Ana Marka Başlığı
+                      const Text(
+                        'Gastrofy',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 36,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 2.0,
+                          shadows: [
+                            Shadow(
+                              color: Colors.black38,
+                              blurRadius: 10,
+                              offset: Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+
+                      // Slogan
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.15),
+                            width: 1,
+                          ),
+                        ),
+                        child: const Text(
+                          'Akıllı Masa & Restoran Yönetimi',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
+
+              const Spacer(flex: 2),
+
+              // Yükleniyor Göstergesi ve Metni
+              FadeTransition(
+                opacity: _fadeAnimation,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(
+                      width: 26,
+                      height: 26,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2.5,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      'Sistem hazırlanıyor...',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.8),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 40),
             ],
           ),
         ),
-        const SizedBox(height: 4),
-        AnimatedTextKit(
-          repeatForever: false,
-          totalRepeatCount: 1,
-          animatedTexts: [
-            TypewriterAnimatedText(
-              'Developed by MET • Powered by MetSoft',
-              textStyle: TextStyle(
-                color: Colors.white.withOpacity(0.7), // Açık gri yazı
-                fontSize: 12,
-                fontStyle: FontStyle.italic,
-                fontWeight: FontWeight.w300,
-              ),
-              speed: const Duration(milliseconds: 70),
-              cursor: '',
-            )
-          ],
-        ),
-      ],
+      ),
     );
   }
 }

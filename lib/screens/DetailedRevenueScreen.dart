@@ -86,7 +86,7 @@ class _DetailedRevenueScreenState extends State<DetailedRevenueScreen> {
               children: [
                 Card(
                   elevation: 4,
-                  shadowColor: Colors.deepPurple.withOpacity(0.1),
+                  shadowColor: Colors.teal.withOpacity(0.1),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20)),
                   child: Padding(
@@ -137,7 +137,7 @@ class _DetailedRevenueScreenState extends State<DetailedRevenueScreen> {
       childAspectRatio: 1.5,
       children: [
         _buildSummaryCard('Toplam Ciro', totalRevenue,
-            Icons.account_balance_wallet_outlined, Colors.deepPurple),
+            Icons.account_balance_wallet_outlined, Colors.teal.shade600),
         _buildSummaryCard('Ortalama Ciro', averageRevenue,
             Icons.multiline_chart_outlined, Colors.teal),
         _buildSummaryCard('En Yüksek Gün', maxRevenue,
@@ -206,7 +206,7 @@ class _DetailedRevenueScreenState extends State<DetailedRevenueScreen> {
   Widget _buildLineChartCard(List<DailyRevenue> revenues) {
     return Card(
       elevation: 4,
-      shadowColor: Colors.deepPurple.withOpacity(0.1),
+      shadowColor: Colors.teal.withOpacity(0.1),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
@@ -281,7 +281,7 @@ class _DetailedRevenueScreenState extends State<DetailedRevenueScreen> {
             spots: spots,
             isCurved: true,
             gradient: LinearGradient(
-                colors: [Colors.deepPurple.shade400, Colors.teal.shade400]),
+                colors: [Colors.teal.shade600, Colors.teal.shade300]),
             barWidth: 4,
             isStrokeCapRound: true,
             dotData: const FlDotData(show: false),
@@ -289,7 +289,7 @@ class _DetailedRevenueScreenState extends State<DetailedRevenueScreen> {
               show: true,
               gradient: LinearGradient(
                 colors: [
-                  Colors.deepPurple.withOpacity(0.3),
+                  Colors.teal.withOpacity(0.3),
                   Colors.teal.withOpacity(0.05)
                 ],
                 begin: Alignment.topCenter,
