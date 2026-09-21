@@ -3,10 +3,12 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
-
-// Showcase ve Tutorial Keys
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/firebase_service.dart';
 import 'package:showcaseview/showcaseview.dart';
+import 'package:provider/provider.dart';
 import '../utils/tutorial_keys.dart';
+import '../widgets/custom_tutorial_tooltip.dart';
 
 // Sayfalar
 import 'home_screen.dart' as home_page;
@@ -17,6 +19,9 @@ import 'table_records_screen.dart';
 import 'veresiye_screen.dart';
 import 'splash_screen.dart';
 import 'ai_chat_screen.dart';
+import 'subscription_plans_screen.dart';
+import '../services/database_service.dart';
+import '../widgets/plan_feature_lock_view.dart';
 
 final GlobalKey screenCaptureKey = GlobalKey();
 
@@ -48,8 +53,8 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
   int _selectedIndex = 0;
-  bool _alwaysVisible = false;
-  bool _dockVisible = false;
+  bool _alwaysVisible = true; // Default to always visible
+  bool _dockVisible = true;   // Default to visible
   Timer? _hideTimer;
 
   // Otomatik Oturum Kapatma
@@ -69,6 +74,11 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
     _loadDockPreference();
     _loadAutoLogoutSettings();
     _initPagesAndPermissions();
+    
+    // Uygulama açıldığında son giriş zamanını güncelle (Auto-Delete için)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      FirebaseService.instance.updateLastLogin(widget.loggedInUser);
+    });
   }
 
   // -----------------------------------------------------------------
@@ -79,6 +89,30 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
     final prefs = await SharedPreferences.getInstance();
     final String role = widget.loggedInUser['userRole'] ?? 'Personel';
     final bool isAdmin = role == 'Yönetici';
+
+    final licenseInfo = await DatabaseService().getLicenseRemainingInfo();
+    final bool isExpired = licenseInfo['isExpired'] == true;
+    final String currentPlan = licenseInfo['planName'] ?? widget.loggedInUser['plan'] ?? 'Ücretsiz Deneme';
+    final bool isAnnualOrTrial = currentPlan.contains('Yıllık') || currentPlan.contains('Deneme') || currentPlan.contains('Trial');
+    final String userEmail = widget.loggedInUser['userEmail']?.toString() ?? '';
+
+    // Süresi dolmuşsa lisans yenileme uyarısı
+    if (isExpired && mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showExpiredSubscriptionDialog();
+      });
+    }
+
+    // AI Danışmanı: Yıllık Plan ve Deneme Sürümünde açık, Aylık Planda kilitli
+    final Widget aiWidget = isAnnualOrTrial
+        ? const AIChatScreen()
+        : PlanFeatureLockView(
+            featureName: 'Table Intelligence (Yapay Zeka Satış Danışmanı)',
+            description: 'İşletmenizin satışlarını katlayan, sipariş önerileri ve masa doluluk analitiği sunan Table Intelligence, Yıllık Plan üyelerine özeldir.',
+            email: userEmail,
+            loggedInUser: widget.loggedInUser,
+            onUpgraded: () => _initPagesAndPermissions(),
+          );
 
     // Kameralar kaldırıldı, liste güncellendi
     final List<PageDefinition> allPages = [
@@ -117,11 +151,10 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
         tutorialKey: TutorialKeys.dockVeresiye,
         permissionKey: 'perm_veresiye',
       ),
-      // Kameralar Buradan Silindi
       PageDefinition(
         title: 'AI Asistan',
         icon: MdiIcons.brain,
-        widget: const AIChatScreen(),
+        widget: aiWidget,
         tutorialKey: TutorialKeys.dockAIChat,
         permissionKey: 'perm_ai',
       ),
@@ -171,17 +204,314 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
     }
   }
 
-  void _startTutorial(List<PageDefinition> currentPages) async {
-    final prefs = await SharedPreferences.getInstance();
-    final bool seenTutorial = prefs.getBool('seen_main_tutorial') ?? false;
+  void _showExpiredSubscriptionDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Row(
+          children: [
+            Icon(Icons.hourglass_bottom_rounded, color: Colors.amber, size: 28),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Abonelik Süreniz Sona Erdi',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+            ),
+          ],
+        ),
+        content: const Text(
+          'Gastrofy restoran yönetim sistemini kullanmaya devam etmek için lütfen bir abonelik planı seçiniz veya satın alımlarınızı geri yükleyiniz.',
+          style: TextStyle(fontSize: 14, height: 1.45, color: Colors.black87),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              final email = widget.loggedInUser['userEmail']?.toString() ?? '';
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => SubscriptionPlansScreen(
+                    email: email,
+                    loggedInUser: widget.loggedInUser,
+                  ),
+                ),
+              );
+              _initPagesAndPermissions();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1E293B),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+            child: const Text('Abonelik Paketlerini İncele', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
 
-    if (!seenTutorial && mounted) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        List<GlobalKey> activeKeys =
-            currentPages.map((p) => p.tutorialKey).toList();
-        ShowCaseWidget.of(context).startShowCase(activeKeys);
-      });
+  Future<void> _checkContractsReapproval() async {
+    final contracts = await FirebaseService.instance.getContracts();
+    if (contracts.isEmpty) return;
+
+    final String privacy = contracts['privacy'] ?? '';
+    final String terms = contracts['terms'] ?? '';
+
+    // İçerik boşsa uyarı gösterme (Kullanıcı isteği: "şuan boş panelde ama uyarı çıktı")
+    if (privacy.trim().isEmpty && terms.trim().isEmpty) return;
+
+    final Timestamp? updatedAt = contracts['updatedAt'] as Timestamp?;
+    if (updatedAt == null) return;
+
+    // Kullanıcı verisinden son onay tarihini al
+    Timestamp? lastAccepted = widget.loggedInUser['lastAcceptedTermsAt'] as Timestamp?;
+    
+    // Eğer veride yoksa (eski kullanıcı), Firestore'dan güncel veriyi çekmeyi dene
+    if (lastAccepted == null) {
+      final email = widget.loggedInUser['userEmail'] ?? '';
+      if (email.isNotEmpty) {
+        final q = FirebaseFirestore.instance.collection('companies').where('email', isEqualTo: email);
+        final snap = await q.get();
+        if (snap.docs.isNotEmpty) {
+          lastAccepted = snap.docs.first.data()['lastAcceptedTermsAt'] as Timestamp?;
+        }
+      }
     }
+
+    // Karşılaştır: Eğer sözleşme güncellenme tarihi, kullanıcının onay tarihinden sonraysa
+    if (lastAccepted == null || updatedAt.toDate().isAfter(lastAccepted.toDate())) {
+      if (!mounted) return;
+      _showMandatoryApprovalDialog(contracts);
+    }
+  }
+
+  void _showMandatoryApprovalDialog(Map<String, dynamic> contracts) {
+    bool isPrivacyAccepted = false;
+    bool isTermsAccepted = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final bool canAccept = isPrivacyAccepted && isTermsAccepted;
+
+          return Dialog.fullscreen(
+            child: Column(
+              children: [
+                AppBar(
+                  title: const Text('Sözleşme Güncellemesi', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  backgroundColor: Colors.teal,
+                  automaticallyImplyLeading: false,
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      children: [
+                        const Icon(Icons.security_update_warning_rounded, size: 64, color: Colors.orange),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Hizmet Şartlarımız Güncellendi',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Size daha iyi hizmet verebilmek için Gizlilik Politikası ve Kullanım Koşullarımızı güncelledik. Devam edebilmek için lütfen yeni şartları inceleyip onaylayın.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 15, color: Colors.black87),
+                        ),
+                        const SizedBox(height: 32),
+                        _buildContractApprovalTile(
+                          title: 'Gizlilik Politikası',
+                          isAccepted: isPrivacyAccepted,
+                          onChanged: (val) => setDialogState(() => isPrivacyAccepted = val!),
+                          onTapText: () => _showTextContentDialog('Gizlilik Politikası', contracts['privacy'] ?? FirebaseService.defaultPrivacyText),
+                        ),
+                        const SizedBox(height: 16),
+                        _buildContractApprovalTile(
+                          title: 'Kullanım Koşulları',
+                          isAccepted: isTermsAccepted,
+                          onChanged: (val) => setDialogState(() => isTermsAccepted = val!),
+                          onTapText: () => _showTextContentDialog('Kullanım Koşulları', contracts['terms'] ?? FirebaseService.defaultTermsText),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 55,
+                    child: ElevatedButton(
+                      onPressed: canAccept ? () async {
+                        final email = widget.loggedInUser['userEmail'] ?? '';
+                        await FirebaseService.instance.updateContractAcceptanceDate(email);
+                        if (mounted) Navigator.pop(context);
+                      } : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.teal,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: const Text('Onaylıyorum ve Devam Et', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildContractApprovalTile({
+    required String title,
+    required bool isAccepted,
+    required ValueChanged<bool?> onChanged,
+    required VoidCallback onTapText,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: CheckboxListTile(
+        value: isAccepted,
+        onChanged: onChanged,
+        activeColor: Colors.teal,
+        title: InkWell(
+          onTap: onTapText,
+          child: Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.w500, decoration: TextDecoration.underline, color: Colors.teal),
+          ),
+        ),
+        subtitle: const Text('Okudum ve kabul ediyorum'),
+        controlAffinity: ListTileControlAffinity.leading,
+      ),
+    );
+  }
+
+  void _showTextContentDialog(String title, String content) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog.fullscreen(
+        child: Column(
+          children: [
+            AppBar(
+              title: Text(title, style: const TextStyle(color: Colors.white)),
+              backgroundColor: Colors.teal,
+              leading: IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Text(content, style: const TextStyle(fontSize: 16, height: 1.6)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+
+  void _startTutorial(List<PageDefinition> currentPages) async {
+    if (mounted) {
+      _showTutorialWelcomeDialog(currentPages);
+    }
+  }
+
+  void _showTutorialWelcomeDialog(List<PageDefinition> currentPages) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Icon(Icons.auto_awesome_rounded, color: Colors.teal.shade600),
+            const SizedBox(width: 10),
+            const Text('Hoş Geldiniz!'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Uygulamayı daha etkili kullanabilmeniz için kısa bir tur yapmak ister misiniz?',
+              style: TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 15),
+            Text(
+              'Şimdi ana sayfa üzerindeki temel özellikleri ve hızlı işlem butonlarını adım adım göstereceğiz.',
+              style: TextStyle(color: Colors.grey.shade700, fontSize: 14),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Eğitimi Atla',
+              style: TextStyle(color: Colors.grey.shade600),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _executeShowcase(currentPages);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.teal,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text('Eğitime Başla'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _executeShowcase(List<PageDefinition> currentPages) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Alt menü (Dock) tuşları
+      List<GlobalKey> activeKeys =
+          currentPages.map((p) => p.tutorialKey).toList();
+
+      // Eğer Ana Sayfadaysak (index 0), yukarıdaki butonları da sıraya ekleyelim
+      if (_selectedIndex == 0) {
+        activeKeys.insertAll(0, [
+          // ÜST ŞERİT (AppBar)
+          TutorialKeys.homeCikis,
+          TutorialKeys.homeDoviz,
+          // APPBAR BUTONLARI (Sağ Üst)
+          TutorialKeys.homeMasaEkle,
+          TutorialKeys.homeHizliSatis,
+          TutorialKeys.homeGorunumModu,
+          TutorialKeys.homeYenile,
+          TutorialKeys.homeIstatistikler,
+          // ALT TABAKA
+          TutorialKeys.homeBolgeler,
+          TutorialKeys.homeMasalarArea,
+        ]);
+      }
+
+      ShowCaseWidget.of(context).startShowCase(activeKeys);
+    });
   }
 
   @override
@@ -360,7 +690,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
   Future<void> _loadDockPreference() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _alwaysVisible = prefs.getBool('dock_always_visible') ?? false;
+      _alwaysVisible = prefs.getBool('dock_always_visible') ?? true;
       if (_alwaysVisible) {
         _dockVisible = true;
       } else if (_selectedIndex == 0) {
@@ -445,22 +775,13 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
 
     return Scaffold(
       extendBody: true,
-      body: GestureDetector(
-        onTap: () {
+      body: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: (_) {
           _showDockTemporarily();
           resetInactivityTimer();
         },
-        onTapDown: (_) => resetInactivityTimer(),
-        onPanDown: (_) => resetInactivityTimer(),
-        onVerticalDragUpdate: (details) {
-          _showDockTemporarily();
-          resetInactivityTimer();
-          final double? delta = details.primaryDelta;
-          if (delta == null) return;
-          if (delta < -10) {
-            _toggleDock(true);
-          } else if (delta > 10) _toggleDock(false);
-        },
+        onPointerMove: (_) => resetInactivityTimer(),
         child: RepaintBoundary(
           key: screenCaptureKey,
           child: Stack(
@@ -543,46 +864,50 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
     final page = _authorizedPages[index];
     final isSelected = _selectedIndex == index;
 
-    return Showcase(
-      key: page.tutorialKey,
-      title: page.title,
-      description: '${page.title} sayfasına git',
-      targetShapeBorder: const CircleBorder(),
-      child: GestureDetector(
-        onTap: () => _onItemTapped(index),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          // HATA DÜZELTME: easeOutBack 0'ın altına inip gölge hatası veriyordu.
-          // easeOutCubic hem yumuşak hem de güvenlidir.
-          curve: Curves.easeOutCubic,
+    final themeColor = isSelected ? Colors.blueAccent : Colors.teal;
 
-          // Seçili ikon hafifçe yukarı kalkar
-          transform: Matrix4.translationValues(0, isSelected ? -6 : 0, 0),
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: isSelected ? Colors.blueAccent : Colors.transparent,
-            shape: BoxShape.circle,
-            // HATA DÜZELTME: null yerine boş liste veya şeffaf gölge
-            // interpolasyonu (geçişi) garantiye alır.
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: Colors.blueAccent.withOpacity(0.4),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    )
-                  ]
-                : [
-                    const BoxShadow(
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+      padding: EdgeInsets.only(bottom: isSelected ? 12 : 0),
+      child: Showcase.withWidget(
+        key: page.tutorialKey,
+        targetShapeBorder: const CircleBorder(),
+        container: CustomTutorialTooltip(
+          title: page.title,
+          description: '${page.title} sayfasına git',
+          themeColor: themeColor,
+        ),
+        child: GestureDetector(
+          onTap: () => _onItemTapped(index),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: isSelected ? Colors.blueAccent : Colors.transparent,
+              shape: BoxShape.circle,
+              boxShadow: isSelected
+                  ? [
+                      BoxShadow(
+                        color: Colors.blueAccent.withOpacity(0.4),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      )
+                    ]
+                  : [
+                      const BoxShadow(
                         color: Colors.transparent,
                         blurRadius: 0,
-                        offset: Offset.zero)
-                  ],
-          ),
-          child: Icon(
-            page.icon,
-            size: 26,
-            color: isSelected ? Colors.white : Colors.grey.shade700,
+                        offset: Offset.zero,
+                      )
+                    ],
+            ),
+            child: Icon(
+              page.icon,
+              size: 26,
+              color: isSelected ? Colors.white : Colors.grey.shade700,
+            ),
           ),
         ),
       ),

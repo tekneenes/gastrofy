@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../models/order_item_model.dart';
 import '../providers/table_provider.dart';
 import '../services/database_helper.dart';
-import 'package:provider/provider.dart';
 
 // -----------------------------------------------------------------
 // Veresiye Model Sınıfı
@@ -96,36 +96,35 @@ class _VeresiyeScreenState extends State<VeresiyeScreen> {
   List<VeresiyeModel> _veresiyeList = [];
   bool _isLoading = true;
   bool _showPaid = false; // Ödenenleri göstermek için filtre
+  bool _isFilterPanelVisible = false;
+
+  final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _minAmountController = TextEditingController();
+  final TextEditingController _maxAmountController = TextEditingController();
+  DateTime? _filterStartDate;
+  DateTime? _filterEndDate;
 
   @override
   void initState() {
     super.initState();
-    _loadVeresiyeRecords();
+    // Data is now handled by TableProvider
+    final provider = Provider.of<TableProvider>(context, listen: false);
+    if (provider.veresiyeRecords.isEmpty) {
+      provider.loadVeresiyeRecords();
+    }
+    _searchController.addListener(() {
+      setState(() {});
+    });
   }
 
-  Future<void> _loadVeresiyeRecords() async {
-    setState(() {
-      _isLoading = true;
-    });
-    try {
-      // DatabaseHelper'ınızda bu fonksiyonun olduğunu varsayıyoruz
-      final records = await DatabaseHelper.instance.getVeresiyeRecords();
-      if (mounted) {
-        setState(() {
-          _veresiyeList = records;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      print("Veresiye kayıtları yüklenirken hata: $e");
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-        _showSnackBar('Kayıtlar yüklenirken bir hata oluştu.', isError: true);
-      }
-    }
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _minAmountController.dispose();
+    _maxAmountController.dispose();
+    super.dispose();
   }
+
 
   // Para formatlayıcı
   String _formatCurrency(double amount) {
@@ -139,53 +138,309 @@ class _VeresiyeScreenState extends State<VeresiyeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final filteredList = _showPaid
-        ? _veresiyeList
-        : _veresiyeList.where((v) => !v.isPaid).toList();
+    return Consumer<TableProvider>(
+      builder: (context, tableProvider, child) {
+        _veresiyeList = tableProvider.veresiyeRecords;
+        _isLoading = tableProvider.isLoading;
 
-    // Kayıtları en yeniden eskiye doğru sırala
-    filteredList.sort((a, b) => b.date.compareTo(a.date));
-
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
-      appBar: AppBar(
-        title: const Text('Veresiye Defteri',
-            style: TextStyle(
-                fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E))),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16.0),
-            child: FilterChip(
-              label: const Text('Ödenenleri Göster'),
-              selected: _showPaid,
-              onSelected: (bool value) {
-                setState(() {
-                  _showPaid = value;
-                });
-              },
-              selectedColor: Colors.blue.shade100,
-              checkmarkColor: Colors.blue.shade800,
-            ),
+        return Scaffold(
+          backgroundColor: const Color(0xFFF5F7FA),
+          appBar: AppBar(
+            title: const Text('Veresiye Defteri',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E))),
+            backgroundColor: Colors.white,
+            elevation: 0,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.refresh_rounded),
+                onPressed: () => tableProvider.loadVeresiyeRecords(),
+              ),
+              const SizedBox(width: 8),
+            ],
           ),
-        ],
+          body: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : Column(
+                  children: [
+                    _buildSearchBar(),
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                      child: _isFilterPanelVisible ? _buildFilterPanel() : const SizedBox.shrink(),
+                    ),
+                    Expanded(
+                      child: _buildVeresiyeList(tableProvider.veresiyeRecords),
+                    ),
+                  ],
+                ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: TextField(
+        controller: _searchController,
+        decoration: InputDecoration(
+          hintText: 'Müşteri adı veya not ara...',
+          prefixIcon: const Icon(Icons.search_rounded, color: Colors.teal),
+          suffixIcon: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_searchController.text.isNotEmpty)
+                IconButton(
+                  icon: const Icon(Icons.clear_rounded, size: 20),
+                  onPressed: () => _searchController.clear(),
+                ),
+              IconButton(
+                icon: Icon(
+                  _isFilterPanelVisible ? Icons.filter_alt_off_outlined : Icons.filter_alt_outlined,
+                  color: _isFilterPanelVisible ? Colors.teal : Colors.grey,
+                ),
+                onPressed: () => setState(() => _isFilterPanelVisible = !_isFilterPanelVisible),
+              ),
+              const SizedBox(width: 4),
+            ],
+          ),
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.teal.withOpacity(0.1)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.teal.withOpacity(0.1)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Colors.teal, width: 1.5),
+          ),
+          contentPadding: const EdgeInsets.symmetric(vertical: 0),
+        ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : filteredList.isEmpty
-              ? _buildEmptyState()
-              : RefreshIndicator(
-                  onRefresh: _loadVeresiyeRecords,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: filteredList.length,
-                    itemBuilder: (context, index) {
-                      final record = filteredList[index];
-                      return _buildVeresiyeCard(record);
-                    },
+    );
+  }
+
+  Widget _buildFilterPanel() {
+    return Card(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      elevation: 4,
+      color: Colors.white,
+      shadowColor: Colors.teal.withOpacity(0.1),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: Colors.teal.withOpacity(0.1), width: 1),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: FilterChip(
+                    label: const Text('Ödenenleri Göster'),
+                    selected: _showPaid,
+                    onSelected: (val) => setState(() => _showPaid = val),
+                    selectedColor: Colors.teal.shade50,
+                    checkmarkColor: Colors.teal.shade700,
+                    backgroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(color: Colors.teal.withOpacity(0.2)),
+                    ),
                   ),
                 ),
+                TextButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _showPaid = false;
+                      _filterStartDate = null;
+                      _filterEndDate = null;
+                      _minAmountController.clear();
+                      _maxAmountController.clear();
+                    });
+                  },
+                  icon: const Icon(Icons.refresh_rounded, size: 18, color: Colors.teal),
+                  label: const Text('Temizle', style: TextStyle(color: Colors.teal)),
+                ),
+              ],
+            ),
+            const Divider(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.calendar_today_rounded, size: 18, color: Colors.teal),
+                    label: Text(
+                      _filterStartDate == null ? 'Başlangıç' : DateFormat('dd.MM.yy').format(_filterStartDate!),
+                      style: const TextStyle(color: Colors.teal),
+                    ),
+                    onPressed: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: _filterStartDate ?? DateTime.now(),
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now(),
+                      );
+                      if (picked != null) setState(() => _filterStartDate = picked);
+                    },
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Colors.teal.withOpacity(0.3)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.calendar_today_rounded, size: 18, color: Colors.teal),
+                    label: Text(
+                      _filterEndDate == null ? 'Bitiş' : DateFormat('dd.MM.yy').format(_filterEndDate!),
+                      style: const TextStyle(color: Colors.teal),
+                    ),
+                    onPressed: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: _filterEndDate ?? DateTime.now(),
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now(),
+                      );
+                      if (picked != null) setState(() => _filterEndDate = picked);
+                    },
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Colors.teal.withOpacity(0.3)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _minAmountController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Min Tutar',
+                      labelStyle: const TextStyle(color: Colors.teal, fontSize: 13),
+                      prefixText: '₺ ',
+                      isDense: true,
+                      filled: true,
+                      fillColor: Colors.teal.withOpacity(0.02),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.teal.withOpacity(0.2)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.teal.withOpacity(0.2)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Colors.teal),
+                      ),
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _maxAmountController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Max Tutar',
+                      labelStyle: const TextStyle(color: Colors.teal, fontSize: 13),
+                      prefixText: '₺ ',
+                      isDense: true,
+                      filled: true,
+                      fillColor: Colors.teal.withOpacity(0.02),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.teal.withOpacity(0.2)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.teal.withOpacity(0.2)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Colors.teal),
+                      ),
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVeresiyeList(List<VeresiyeModel> allRecords) {
+    final query = _searchController.text.toLowerCase();
+    final minAmount = double.tryParse(_minAmountController.text);
+    final maxAmount = double.tryParse(_maxAmountController.text);
+
+    final filteredList = allRecords.where((record) {
+      // Basic Filters
+      if (!_showPaid && record.isPaid) return false;
+
+      // Search Query
+      if (query.isNotEmpty) {
+        final nameMatch = record.customerName.toLowerCase().contains(query);
+        final noteMatch = (record.note ?? '').toLowerCase().contains(query);
+        
+        // Product names search
+        bool productMatch = false;
+        try {
+          final List<dynamic> decodedList = jsonDecode(record.itemsJson);
+          for (var itemMap in decodedList) {
+            final productName = (itemMap['productName'] ?? '').toString().toLowerCase();
+            if (productName.contains(query)) {
+              productMatch = true;
+              break;
+            }
+          }
+        } catch (_) {}
+
+        if (!nameMatch && !noteMatch && !productMatch) return false;
+      }
+
+      // Date Filters
+      if (_filterStartDate != null && record.date.isBefore(_filterStartDate!)) return false;
+      if (_filterEndDate != null && record.date.isAfter(_filterEndDate!.add(const Duration(days: 1)))) return false;
+
+      // Amount Filters
+      if (minAmount != null && record.totalAmount < minAmount) return false;
+      if (maxAmount != null && record.totalAmount > maxAmount) return false;
+
+      return true;
+    }).toList();
+
+    // Sort newest first
+    filteredList.sort((a, b) => b.date.compareTo(a.date));
+
+    if (filteredList.isEmpty) return _buildEmptyState();
+
+    return RefreshIndicator(
+      onRefresh: () => Provider.of<TableProvider>(context, listen: false).loadVeresiyeRecords(),
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        itemCount: filteredList.length,
+        itemBuilder: (context, index) {
+          return _buildVeresiyeCard(filteredList[index]);
+        },
+      ),
     );
   }
 
@@ -214,7 +469,8 @@ class _VeresiyeScreenState extends State<VeresiyeScreen> {
   }
 
   Widget _buildVeresiyeCard(VeresiyeModel record) {
-    final color = record.isPaid ? Colors.green : Colors.blue;
+    final statusColor = record.isPaid ? Colors.green : Colors.teal;
+    final accentColor = record.isPaid ? Colors.green.shade700 : Colors.teal.shade700;
 
     // JSON'dan sipariş listesini çöz
     List<OrderItem> items = [];
@@ -227,11 +483,12 @@ class _VeresiyeScreenState extends State<VeresiyeScreen> {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
-      elevation: 4,
-      shadowColor: color.withAlpha((255 * 0.2).round()),
+      elevation: 6,
+      color: Colors.white,
+      shadowColor: statusColor.withOpacity(0.1),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: color.withAlpha((255 * 0.5).round()), width: 1),
+        borderRadius: BorderRadius.circular(24),
+        side: BorderSide(color: statusColor.withOpacity(0.05), width: 1),
       ),
       child: ExpansionTile(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -240,14 +497,14 @@ class _VeresiyeScreenState extends State<VeresiyeScreen> {
         leading: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: color.withAlpha((255 * 0.1).round()),
+            color: statusColor.withOpacity(0.1),
             borderRadius: BorderRadius.circular(16),
           ),
           child: Icon(
             record.isPaid
                 ? Icons.check_circle_outline_rounded
-                : Icons.person_outline_rounded,
-            color: color.shade700,
+                : Icons.account_balance_wallet_outlined,
+            color: accentColor,
             size: 28,
           ),
         ),
@@ -262,9 +519,9 @@ class _VeresiyeScreenState extends State<VeresiyeScreen> {
             Text(
               _formatCurrency(record.totalAmount),
               style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: color.shade800),
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: accentColor),
             ),
             const SizedBox(height: 2),
             Text(
@@ -274,17 +531,24 @@ class _VeresiyeScreenState extends State<VeresiyeScreen> {
           ],
         ),
         trailing: record.isPaid
-            ? Chip(
-                label: const Text('ÖDENDİ'),
-                backgroundColor: Colors.green.shade100,
-                labelStyle: TextStyle(
-                    color: Colors.green.shade900,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold),
+            ? Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.teal.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.teal.shade100),
+                ),
+                child: Text(
+                  'ÖDENDİ',
+                  style: TextStyle(
+                      color: Colors.teal.shade800,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold),
+                ),
               )
             : IconButton(
                 icon: Icon(Icons.delete_outline_rounded,
-                    color: Colors.red.shade400),
+                    color: Colors.teal.shade300),
                 tooltip: 'Kaydı Sil',
                 onPressed: () => _deleteRecord(record),
               ),
@@ -323,9 +587,9 @@ class _VeresiyeScreenState extends State<VeresiyeScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.amber.shade50,
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.amber.shade200),
+                      border: Border.all(color: Colors.teal.shade100),
                     ),
                     child: Text(
                       record.note!,
@@ -340,10 +604,10 @@ class _VeresiyeScreenState extends State<VeresiyeScreen> {
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     TextButton.icon(
-                      icon: Icon(Icons.edit_note_rounded,
-                          color: Colors.orange.shade700),
-                      label: Text('Düzenle',
-                          style: TextStyle(color: Colors.orange.shade800)),
+                      icon: const Icon(Icons.edit_note_rounded,
+                          color: Colors.teal),
+                      label: const Text('Düzenle',
+                          style: TextStyle(color: Colors.teal)),
                       onPressed: () => _editRecord(record),
                     ),
                     const SizedBox(width: 8),
@@ -354,7 +618,7 @@ class _VeresiyeScreenState extends State<VeresiyeScreen> {
                         label: const Text('Ödendi İşaretle',
                             style: TextStyle(color: Colors.white)),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green.shade600,
+                          backgroundColor: Colors.teal,
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12)),
                         ),
@@ -407,7 +671,11 @@ class _VeresiyeScreenState extends State<VeresiyeScreen> {
 
                 _showSnackBar('Ödeme kaydedildi ve ciroya eklendi.',
                     isSuccess: true);
-                _loadVeresiyeRecords(); // Listeyi yenile
+                
+                // Provider'ı güncelle (listeyi yenile)
+                if (mounted) {
+                  Provider.of<TableProvider>(context, listen: false).loadVeresiyeRecords();
+                }
               } catch (e) {
                 print("Veresiye ödeme hatası: $e");
                 _showSnackBar('Ödeme kaydedilirken bir hata oluştu.',
@@ -477,7 +745,11 @@ class _VeresiyeScreenState extends State<VeresiyeScreen> {
                 // DB'yi güncelle (Bu fonksiyonu DatabaseHelper'da oluşturmalısınız)
                 await DatabaseHelper.instance.updateVeresiye(updatedRecord);
                 _showSnackBar('Kayıt güncellendi.', isSuccess: true);
-                _loadVeresiyeRecords(); // Listeyi yenile
+                
+                // Provider'ı güncelle (listeyi yenile)
+                if (mounted) {
+                  Provider.of<TableProvider>(context, listen: false).loadVeresiyeRecords();
+                }
               } catch (e) {
                 print("Veresiye güncelleme hatası: $e");
                 _showSnackBar('Kayıt güncellenirken bir hata oluştu.',
@@ -503,7 +775,7 @@ class _VeresiyeScreenState extends State<VeresiyeScreen> {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Kaydı Sil', style: TextStyle(color: Colors.red)),
+        title: const Text('Kaydı Sil', style: TextStyle(color: Colors.teal)),
         content: Text(
             '${record.customerName} adlı kaydı kalıcı olarak silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.'),
         actions: [
@@ -513,7 +785,7 @@ class _VeresiyeScreenState extends State<VeresiyeScreen> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
+                backgroundColor: Colors.teal,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12))),
             onPressed: () async {
@@ -524,7 +796,11 @@ class _VeresiyeScreenState extends State<VeresiyeScreen> {
                 // DB'den sil (Bu fonksiyonu DatabaseHelper'da oluşturmalısınız)
                 await DatabaseHelper.instance.deleteVeresiye(record.id!);
                 _showSnackBar('Kayıt silindi.', isSuccess: true);
-                _loadVeresiyeRecords(); // Listeyi yenile
+                
+                // Provider'ı güncelle (listeyi yenile)
+                if (mounted) {
+                  Provider.of<TableProvider>(context, listen: false).loadVeresiyeRecords();
+                }
               } catch (e) {
                 print("Veresiye silme hatası: $e");
                 _showSnackBar('Kayıt silinirken bir hata oluştu.',
@@ -545,7 +821,7 @@ class _VeresiyeScreenState extends State<VeresiyeScreen> {
       SnackBar(
         content: Text(message),
         backgroundColor: isError
-            ? Colors.red.shade600
+            ? Colors.orange.shade900
             : (isSuccess ? Colors.green.shade600 : Colors.blue.shade600),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),

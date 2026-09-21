@@ -5,6 +5,8 @@ import 'package:intl/date_symbol_data_local.dart';
 
 import '../services/database_helper.dart';
 import '../models/table_record_model.dart';
+import '../providers/table_provider.dart';
+import 'package:provider/provider.dart';
 
 class TableRecordsScreen extends StatefulWidget {
   const TableRecordsScreen({super.key});
@@ -14,12 +16,6 @@ class TableRecordsScreen extends StatefulWidget {
 }
 
 class _TableRecordsScreenState extends State<TableRecordsScreen> {
-  List<TableRecordModel> _allRecords = [];
-  List<TableRecordModel> _filteredRecords = [];
-  Map<String, List<TableRecordModel>> _groupedRecords = {};
-
-  bool _isLoading = true;
-  bool _isFilterApplied = false;
   bool _isFilterPanelVisible = false;
 
   String? _selectedTableFilter;
@@ -28,6 +24,7 @@ class _TableRecordsScreenState extends State<TableRecordsScreen> {
   TimeOfDay? _filterStartTime;
   TimeOfDay? _filterEndTime;
   int _noteFilterIndex = 0;
+  String _currentSort = 'Date (Newest)';
 
   final TextEditingController _minPriceController = TextEditingController();
   final TextEditingController _maxPriceController = TextEditingController();
@@ -38,7 +35,11 @@ class _TableRecordsScreenState extends State<TableRecordsScreen> {
   void initState() {
     super.initState();
     initializeDateFormatting('tr_TR', null).then((_) {
-      _fetchRecords();
+      // Data is now handled by TableProvider, but we still trigger initial load if empty
+      final provider = Provider.of<TableProvider>(context, listen: false);
+      if (provider.tableRecords.isEmpty) {
+        provider.loadTableRecords();
+      }
     });
   }
 
@@ -51,34 +52,15 @@ class _TableRecordsScreenState extends State<TableRecordsScreen> {
     super.dispose();
   }
 
-  Future<void> _fetchRecords() async {
-    setState(() => _isLoading = true);
-    try {
-      final rawMaps =
-          await DatabaseHelper.instance.getClosedOrdersLastSixMonths();
-      _allRecords =
-          rawMaps.map((map) => TableRecordModel.fromSqliteMap(map)).toList();
-      _applyFilters();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Kayıtlar yüklenirken hata oluştu: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-    setState(() => _isLoading = false);
-  }
 
-  void _applyFilters() {
+  // Filtreleme ve gruplama mantığını build içinde kullanmak için saf fonksiyon haline getirdik
+  Map<String, dynamic> _getFilteredData(List<TableRecordModel> allRecords) {
     final minPriceFilter = double.tryParse(_minPriceController.text);
     final maxPriceFilter = double.tryParse(_maxPriceController.text);
     final minDurationFilter = int.tryParse(_minDurationController.text);
     final maxDurationFilter = int.tryParse(_maxDurationController.text);
 
-    List<TableRecordModel> results = _allRecords.where((record) {
+    final results = allRecords.where((record) {
       final dateMatch = (_filterStartDate == null ||
               !record.startTime.isBefore(_filterStartDate!)) &&
           (_filterEndDate == null ||
@@ -120,16 +102,32 @@ class _TableRecordsScreenState extends State<TableRecordsScreen> {
           durationMatch;
     }).toList();
 
-    results.sort((a, b) => b.startTime.compareTo(a.startTime));
+    // Sorting results
+    if (_currentSort == 'Date (Newest)') {
+      results.sort((a, b) => b.startTime.compareTo(a.startTime));
+    } else if (_currentSort == 'Date (Oldest)') {
+      results.sort((a, b) => a.startTime.compareTo(b.startTime));
+    } else if (_currentSort == 'Price (High to Low)') {
+      results.sort((a, b) => b.totalPrice.compareTo(a.totalPrice));
+    } else if (_currentSort == 'Price (Low to High)') {
+      results.sort((a, b) => a.totalPrice.compareTo(b.totalPrice));
+    } else if (_currentSort == 'Duration (Longest)') {
+      results.sort((a, b) => b.duration.compareTo(a.duration));
+    } else if (_currentSort == 'Duration (Shortest)') {
+      results.sort((a, b) => a.duration.compareTo(b.duration));
+    }
+
+    final double totalRevenue = results.fold(0, (sum, item) => sum + item.totalPrice);
 
     final Map<String, List<TableRecordModel>> grouped = {};
-    for (var record in results) {
-      final monthKey =
-          DateFormat('MMMM yyyy', 'tr_TR').format(record.startTime);
-      if (grouped[monthKey] == null) {
-        grouped[monthKey] = [];
+    if (_currentSort.contains('Date')) {
+      for (var record in results) {
+        final monthKey = DateFormat('MMMM yyyy', 'tr_TR').format(record.startTime);
+        if (grouped[monthKey] == null) {
+          grouped[monthKey] = [];
+        }
+        grouped[monthKey]!.add(record);
       }
-      grouped[monthKey]!.add(record);
     }
 
     final isAnyFilterApplied = _filterStartDate != null ||
@@ -143,11 +141,12 @@ class _TableRecordsScreenState extends State<TableRecordsScreen> {
         minDurationFilter != null ||
         maxDurationFilter != null;
 
-    setState(() {
-      _filteredRecords = results;
-      _groupedRecords = grouped;
-      _isFilterApplied = isAnyFilterApplied;
-    });
+    return {
+      'filtered': results,
+      'grouped': grouped,
+      'isApplied': isAnyFilterApplied,
+      'totalRevenue': totalRevenue,
+    };
   }
 
   void _resetFilters() {
@@ -163,24 +162,23 @@ class _TableRecordsScreenState extends State<TableRecordsScreen> {
       _minDurationController.clear();
       _maxDurationController.clear();
     });
-    _applyFilters();
   }
 
   // Kaydı silmek için metod
   Future<void> _deleteRecord(TableRecordModel record) async {
     try {
       await DatabaseHelper.instance.deleteClosedOrder(record.id);
-
-      setState(() {
-        _allRecords.removeWhere((r) => r.id == record.id);
-      });
-      _applyFilters(); // Listeyi ve grupları yeniden oluştur
+      
+      // Provider'ı güncelle
+      if (mounted) {
+        Provider.of<TableProvider>(context, listen: false).loadTableRecords();
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('${record.tableName} kaydı başarıyla silindi.'),
-            backgroundColor: Colors.green.shade600,
+            backgroundColor: Colors.teal.shade600,
             behavior: SnackBarBehavior.floating,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -200,8 +198,6 @@ class _TableRecordsScreenState extends State<TableRecordsScreen> {
             margin: const EdgeInsets.all(16),
           ),
         );
-        // Hata durumunda listeyi sunucuyla tekrar eşitle
-        _fetchRecords();
       }
     }
   }
@@ -225,7 +221,7 @@ class _TableRecordsScreenState extends State<TableRecordsScreen> {
             ElevatedButton(
               onPressed: () => Navigator.pop(context, true),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red.shade600,
+                backgroundColor: Colors.teal.shade800,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
@@ -240,73 +236,93 @@ class _TableRecordsScreenState extends State<TableRecordsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final List<dynamic> listItems = [];
-    _groupedRecords.forEach((month, records) {
-      listItems.add(month);
-      listItems.addAll(records);
-    });
+    return Consumer<TableProvider>(
+      builder: (context, tableProvider, child) {
+        final data = _getFilteredData(tableProvider.tableRecords);
+        final filteredRecords = data['filtered'] as List<TableRecordModel>;
+        final groupedRecords = data['grouped'] as Map<String, List<TableRecordModel>>;
+        final isFilterApplied = data['isApplied'] as bool;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
-      appBar: AppBar(
-        systemOverlayStyle: SystemUiOverlayStyle.dark,
-        title: const Text('Masa Kayıt Geçmişi',
-            style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1A1A2E),
-                fontSize: 24)),
-        toolbarHeight: 70,
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF1A1A2E),
-        elevation: 0,
-        shadowColor: Colors.black.withOpacity(0.05),
-        surfaceTintColor: Colors.white,
-        actions: [
-          _buildAppBarAction(
-            _isFilterPanelVisible
-                ? Icons.filter_alt_off_outlined
-                : Icons.filter_alt_outlined,
-            'Filtrele',
-            _isFilterApplied
-                ? Colors.teal.shade600
-                : Colors.deepPurple.shade600,
-            () =>
-                setState(() => _isFilterPanelVisible = !_isFilterPanelVisible),
+        final List<dynamic> listItems = [];
+        if (_currentSort.contains('Date')) {
+          groupedRecords.forEach((month, records) {
+            listItems.add(month);
+            listItems.addAll(records);
+          });
+        } else {
+          listItems.addAll(filteredRecords);
+        }
+
+        return Scaffold(
+          backgroundColor: const Color(0xFFF5F7FA),
+          appBar: AppBar(
+            systemOverlayStyle: SystemUiOverlayStyle.dark,
+            title: const Text('Masa Kayıt Geçmişi',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF00796B),
+                    fontSize: 24)),
+            toolbarHeight: 70,
+            backgroundColor: Colors.white,
+            foregroundColor: const Color(0xFF00796B),
+            elevation: 0,
+            shadowColor: Colors.black.withOpacity(0.05),
+            surfaceTintColor: Colors.white,
+            actions: [
+              _buildAppBarAction(
+                _isFilterPanelVisible
+                    ? Icons.filter_alt_off_outlined
+                    : Icons.filter_alt_outlined,
+                'Filtrele',
+                isFilterApplied
+                    ? Colors.teal.shade700
+                    : Colors.teal.shade500,
+                () => setState(
+                    () => _isFilterPanelVisible = !_isFilterPanelVisible),
+              ),
+              _buildAppBarAction(
+                Icons.refresh_rounded,
+                'Yenile',
+                Colors.teal.shade600,
+                () => tableProvider.loadTableRecords(),
+              ),
+              const SizedBox(width: 16),
+            ],
           ),
-          // OTOMATİK RAPOR AYARLARI BUTONU KALDIRILDI
-          const SizedBox(width: 16),
-        ],
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                AnimatedSize(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                  child: _isFilterPanelVisible
-                      ? _buildFilterPanel()
-                      : const SizedBox.shrink(),
+          body: tableProvider.isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : Column(
+                  children: [
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                      child: _isFilterPanelVisible
+                          ? _buildFilterPanel(tableProvider.tableRecords)
+                          : _buildQuickFilterChips(isFilterApplied),
+                    ),
+                    if (filteredRecords.isNotEmpty)
+                      _buildSummaryStats(filteredRecords.length, data['totalRevenue'] as double),
+                    Expanded(
+                      child: filteredRecords.isEmpty
+                          ? _buildEmptyState(isFilterApplied)
+                          : ListView.builder(
+                              padding: const EdgeInsets.all(16),
+                              itemCount: listItems.length,
+                              itemBuilder: (context, index) {
+                                final item = listItems[index];
+                                if (item is String) {
+                                  return _buildMonthHeader(item);
+                                } else if (item is TableRecordModel) {
+                                  return _buildRecordCard(item);
+                                }
+                                return const SizedBox.shrink();
+                              },
+                            ),
+                    ),
+                  ],
                 ),
-                Expanded(
-                  child: _filteredRecords.isEmpty
-                      ? _buildEmptyState()
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: listItems.length,
-                          itemBuilder: (context, index) {
-                            final item = listItems[index];
-                            if (item is String) {
-                              return _buildMonthHeader(item);
-                            } else if (item is TableRecordModel) {
-                              return _buildRecordCard(item);
-                            }
-                            return const SizedBox.shrink();
-                          },
-                        ),
-                ),
-              ],
-            ),
+        );
+      },
     );
   }
 
@@ -357,17 +373,20 @@ class _TableRecordsScreenState extends State<TableRecordsScreen> {
     );
   }
 
-  Widget _buildFilterPanel() {
+  Widget _buildFilterPanel(List<TableRecordModel> allRecords) {
     return Card(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       elevation: 4,
-      shadowColor: Colors.deepPurple.withOpacity(0.1),
+      shadowColor: Colors.teal.withOpacity(0.1),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            _buildFilterSectionTitle('Hızlı Tarih Seçenekleri'),
+            _buildDateShortcuts(),
+            const SizedBox(height: 20),
             _buildFilterSectionTitle('Tarih & Saat Aralığı'),
             Row(children: [
               Expanded(
@@ -406,10 +425,10 @@ class _TableRecordsScreenState extends State<TableRecordsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildFilterSectionTitle('Masa'),
-                    _buildTableDropdown(),
+                    _buildTableDropdown(allRecords),
                     const SizedBox(height: 16),
-                    _buildFilterSectionTitle('Not Durumu'),
-                    _buildNoteToggleButtons(),
+                    _buildFilterSectionTitle('Sıralama'),
+                    _buildSortDropdown(),
                   ],
                 ),
               ),
@@ -426,13 +445,12 @@ class _TableRecordsScreenState extends State<TableRecordsScreen> {
               const SizedBox(width: 8),
               ElevatedButton.icon(
                 onPressed: () {
-                  _applyFilters();
                   setState(() => _isFilterPanelVisible = false);
                 },
                 icon: const Icon(Icons.check_circle_outline_rounded),
                 label: const Text('Filtrele'),
                 style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurple.shade400,
+                    backgroundColor: Colors.teal.shade600,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12))),
@@ -471,7 +489,7 @@ class _TableRecordsScreenState extends State<TableRecordsScreen> {
       label: Text(text, overflow: TextOverflow.ellipsis),
       style: OutlinedButton.styleFrom(
         foregroundColor: Colors.grey.shade800,
-        side: BorderSide(color: Colors.grey.shade300),
+        side: BorderSide(color: Colors.grey.shade400),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
       ),
@@ -499,7 +517,15 @@ class _TableRecordsScreenState extends State<TableRecordsScreen> {
         fillColor: Colors.grey.shade100,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
+          borderSide: BorderSide(color: Colors.grey.shade400),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.teal.shade400, width: 2),
         ),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -507,18 +533,26 @@ class _TableRecordsScreenState extends State<TableRecordsScreen> {
     );
   }
 
-  Widget _buildTableDropdown() {
+  Widget _buildTableDropdown(List<TableRecordModel> allRecords) {
     final List<String> availableTables =
-        _allRecords.map((e) => e.tableName).toSet().toList()..sort();
+        allRecords.map((e) => e.tableName).toSet().toList()..sort();
     return DropdownButtonFormField<String>(
       decoration: InputDecoration(
         filled: true,
         fillColor: Colors.grey.shade100,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
+          borderSide: BorderSide(color: Colors.grey.shade400),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.teal.shade400, width: 2),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       ),
       value: _selectedTableFilter,
       hint: const Text('Tüm Masalar'),
@@ -541,8 +575,8 @@ class _TableRecordsScreenState extends State<TableRecordsScreen> {
       onPressed: (index) => setState(() => _noteFilterIndex = index),
       borderRadius: BorderRadius.circular(12),
       selectedColor: Colors.white,
-      fillColor: Colors.deepPurple.shade400,
-      color: Colors.deepPurple.shade400,
+      fillColor: Colors.teal.shade500,
+      color: Colors.teal.shade500,
       constraints: const BoxConstraints(minHeight: 48.0, minWidth: 60.0),
       children: const [
         Text('Tümü'),
@@ -552,7 +586,7 @@ class _TableRecordsScreenState extends State<TableRecordsScreen> {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(bool isFilterApplied) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -571,7 +605,7 @@ class _TableRecordsScreenState extends State<TableRecordsScreen> {
           ),
           const SizedBox(height: 24),
           Text(
-            _isFilterApplied
+            isFilterApplied
                 ? 'Filtreye Uyan Kayıt Yok'
                 : 'Kayıt Bulunmamaktadır',
             style: TextStyle(
@@ -581,7 +615,7 @@ class _TableRecordsScreenState extends State<TableRecordsScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            _isFilterApplied
+            isFilterApplied
                 ? 'Farklı bir filtreleme yapmayı deneyin.'
                 : 'Kapatılmış masa kayıtları burada listelenir.',
             style: TextStyle(fontSize: 16, color: Colors.grey[500]),
@@ -593,7 +627,11 @@ class _TableRecordsScreenState extends State<TableRecordsScreen> {
   }
 
   Widget _buildRecordCard(TableRecordModel record) {
-    const color = Colors.deepPurple;
+    final bool isQuickSale = record.tableName.toLowerCase().contains('hızlı') ||
+        record.tableName.toLowerCase().contains('satış') ||
+        record.tableName == 'QUICK_SALE';
+    final MaterialColor color = isQuickSale ? Colors.blue : Colors.teal;
+
     return Dismissible(
       key: ValueKey(record.id),
       direction: DismissDirection.endToStart,
@@ -655,19 +693,41 @@ class _TableRecordsScreenState extends State<TableRecordsScreen> {
                   width: 60,
                   height: 60,
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
+                    color: color.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: color.withOpacity(0.2), width: 2),
+                    border: Border.all(color: color.withOpacity(0.25), width: 2),
                   ),
                   child: Center(
-                    child: Text(
-                      record.tableName.split(" ").last,
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: color.shade700,
-                      ),
-                    ),
+                    child: isQuickSale
+                        ? Icon(
+                            Icons.bolt_rounded,
+                            size: 32,
+                            color: color.shade700,
+                          )
+                        : (int.tryParse(record.tableName.split(" ").last) != null
+                            ? Text(
+                                record.tableName.split(" ").last,
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: color.shade700,
+                                ),
+                              )
+                            : FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(6),
+                                  child: Text(
+                                    record.tableName.split(" ").last,
+                                    maxLines: 1,
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: color.shade700,
+                                    ),
+                                  ),
+                                ),
+                              )),
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -717,7 +777,7 @@ class _TableRecordsScreenState extends State<TableRecordsScreen> {
                       style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
-                          color: Colors.green.shade700),
+                          color: Colors.teal.shade700),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -808,7 +868,7 @@ class _TableRecordsScreenState extends State<TableRecordsScreen> {
                               style: const TextStyle(
                                   fontSize: 28,
                                   fontWeight: FontWeight.bold,
-                                  color: Color(0xFF1A1A2E))),
+                                  color: Color(0xFF00796B))),
                           const SizedBox(height: 8),
                           Text(_formatDateTime(record.startTime),
                               style: const TextStyle(
@@ -841,7 +901,7 @@ class _TableRecordsScreenState extends State<TableRecordsScreen> {
                               style: const TextStyle(
                                   fontSize: 20,
                                   fontWeight: FontWeight.bold,
-                                  color: Color(0xFF1A1A2E))),
+                                  color: Color(0xFF1B5E20))),
                           const SizedBox(height: 15),
                           ...record.items
                               .map((item) => Card(
@@ -856,7 +916,7 @@ class _TableRecordsScreenState extends State<TableRecordsScreen> {
                                           style: TextStyle(
                                               fontSize: 16,
                                               fontWeight: FontWeight.bold,
-                                              color: Colors.teal.shade700)),
+                                              color: Colors.green.shade700)),
                                       title: Text(item.productName,
                                           style: const TextStyle(
                                               fontSize: 16,
@@ -879,27 +939,27 @@ class _TableRecordsScreenState extends State<TableRecordsScreen> {
   Widget _buildNoteSection(String note) {
     return Card(
       elevation: 0,
-      color: Colors.amber.shade50,
+      color: Colors.teal.shade50,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Colors.amber.shade200, width: 1.5),
+        side: BorderSide(color: Colors.teal.shade100, width: 1),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Icon(Icons.sticky_note_2_outlined,
-                    color: Colors.amber.shade800, size: 22),
+                    color: Colors.teal.shade800, size: 22),
                 const SizedBox(width: 8),
                 Text(
                   'Masa Notu',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: Colors.amber.shade900,
+                    color: Colors.teal.shade900,
                   ),
                 ),
               ],
@@ -924,12 +984,12 @@ class _TableRecordsScreenState extends State<TableRecordsScreen> {
       required String title,
       required String value,
       bool isTotal = false}) {
-    final color = isTotal ? Colors.green.shade700 : const Color(0xFF1A1A2E);
+    final color = isTotal ? Colors.teal.shade800 : const Color(0xFF00695C);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10.0),
       child: Row(
         children: [
-          Icon(icon, color: Colors.grey.shade500, size: 22),
+          Icon(icon, color: const Color(0xFF00796B), size: 22),
           const SizedBox(width: 15),
           Expanded(
             child: Text(
@@ -949,5 +1009,170 @@ class _TableRecordsScreenState extends State<TableRecordsScreen> {
 
   String _formatDateTime(DateTime dt) {
     return DateFormat('dd.MM.yyyy HH:mm', 'tr_TR').format(dt);
+  }
+
+  Widget _buildDateShortcuts() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _buildShortcutChip('Bugün', () {
+            final now = DateTime.now();
+            final today = DateTime(now.year, now.month, now.day);
+            setState(() {
+              _filterStartDate = today;
+              _filterEndDate = today;
+            });
+          }),
+          _buildShortcutChip('Dün', () {
+            final yesterday = DateTime.now().subtract(const Duration(days: 1));
+            final date = DateTime(yesterday.year, yesterday.month, yesterday.day);
+            setState(() {
+              _filterStartDate = date;
+              _filterEndDate = date;
+            });
+          }),
+          _buildShortcutChip('Bu Hafta', () {
+            final now = DateTime.now();
+            final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+            setState(() {
+              _filterStartDate = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
+              _filterEndDate = DateTime(now.year, now.month, now.day);
+            });
+          }),
+          _buildShortcutChip('Bu Ay', () {
+            final now = DateTime.now();
+            setState(() {
+              _filterStartDate = DateTime(now.year, now.month, 1);
+              _filterEndDate = DateTime(now.year, now.month, now.day);
+            });
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildShortcutChip(String label, VoidCallback onTap) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8.0),
+      child: ActionChip(
+        label: Text(label),
+        backgroundColor: Colors.teal.shade50,
+        labelStyle: TextStyle(color: Colors.teal.shade800, fontWeight: FontWeight.bold),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide.none),
+        onPressed: onTap,
+      ),
+    );
+  }
+
+  Widget _buildSortDropdown() {
+    final List<Map<String, String>> sortOptions = [
+      {'label': 'Tarih (Yeniden Eskiye)', 'value': 'Date (Newest)'},
+      {'label': 'Tarih (Eskiden Yeniye)', 'value': 'Date (Oldest)'},
+      {'label': 'Fiyat (Yüksekten Düşüğe)', 'value': 'Price (High to Low)'},
+      {'label': 'Fiyat (Düşükten Yükseğe)', 'value': 'Price (Low to High)'},
+      {'label': 'Süre (Uzundan Kısaya)', 'value': 'Duration (Longest)'},
+      {'label': 'Süre (Kısadan Uzuna)', 'value': 'Duration (Shortest)'},
+    ];
+    return DropdownButtonFormField<String>(
+      decoration: InputDecoration(
+        filled: true,
+        fillColor: Colors.grey.shade100,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade400),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.teal.shade400, width: 2),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      ),
+      value: _currentSort,
+      items: sortOptions
+          .map((opt) => DropdownMenuItem(value: opt['value'], child: Text(opt['label'] ?? '')))
+          .toList(),
+      onChanged: (value) {
+        if (value != null) setState(() => _currentSort = value);
+      },
+    );
+  }
+
+  Widget _buildQuickFilterChips(bool isApplied) {
+    if (!isApplied) return const SizedBox.shrink();
+    return Container(
+      height: 50,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          if (_filterStartDate != null)
+            _buildActiveChip('Başlangıç: ${DateFormat('dd.MM').format(_filterStartDate!)}', () => setState(() => _filterStartDate = null)),
+          if (_filterEndDate != null)
+            _buildActiveChip('Bitiş: ${DateFormat('dd.MM').format(_filterEndDate!)}', () => setState(() => _filterEndDate = null)),
+          if (_selectedTableFilter != null)
+            _buildActiveChip('Masa: $_selectedTableFilter', () => setState(() => _selectedTableFilter = null)),
+          if (_minPriceController.text.isNotEmpty)
+            _buildActiveChip('Min: ${_minPriceController.text}₺', () => {setState(() => _minPriceController.clear())}),
+          if (_maxPriceController.text.isNotEmpty)
+            _buildActiveChip('Max: ${_maxPriceController.text}₺', () => {setState(() => _maxPriceController.clear())}),
+          if (_noteFilterIndex != 0)
+            _buildActiveChip(_noteFilterIndex == 1 ? 'Notlu' : 'Notsuz', () => setState(() => _noteFilterIndex = 0)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActiveChip(String label, VoidCallback onDelete) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8.0, bottom: 8.0),
+      child: Chip(
+        label: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+        deleteIcon: const Icon(Icons.close, size: 14),
+        onDeleted: onDelete,
+        backgroundColor: Colors.teal.shade50,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide.none),
+      ),
+    );
+  }
+
+  Widget _buildSummaryStats(int count, double total) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.teal.shade600, Colors.teal.shade800],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.teal.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.list_alt_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 8),
+              Text('$count Kayıt', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+            ],
+          ),
+          Row(
+            children: [
+              Text(
+                NumberFormat.currency(locale: 'tr_TR', symbol: '₺').format(total),
+                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 20),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -19,5 +19,15 @@ class TutorialKeys {
 
   // İPUCU: HomeScreen'deki "Masa Ekle" butonu için de
   // buraya bir key ekleyip, o sayfada kullanabilirsiniz.
-  // static final GlobalKey homeMasaEkle = GlobalKey();
+  static final GlobalKey homeMasaEkle = GlobalKey();
+  static final GlobalKey homeHizliSatis = GlobalKey();
+  static final GlobalKey homeYenile = GlobalKey();
+  static final GlobalKey homeIstatistikler = GlobalKey();
+  static final GlobalKey homeBolgeler = GlobalKey();
+  static final GlobalKey homeDoviz = GlobalKey();
+  static final GlobalKey homeCanliLog = GlobalKey();
+  static final GlobalKey homeMasalarArea = GlobalKey();
+  static final GlobalKey homeGorunumModu = GlobalKey();
+  static final GlobalKey homeCikis = GlobalKey();
+  static final GlobalKey dockCikis = GlobalKey();
 }

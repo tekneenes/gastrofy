@@ -1,13 +1,14 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../models/product_model.dart';
 import '../models/category_model.dart';
 import '../providers/product_provider.dart';
 import '../services/menu_generator_service.dart';
-import 'html_preview_screen.dart';
 
 class ProductScreen extends StatefulWidget {
   const ProductScreen({super.key});
@@ -21,7 +22,11 @@ class _ProductScreenState extends State<ProductScreen>
   // Controller'lar
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
+  final TextEditingController _imageUrlController = TextEditingController();
   final TextEditingController _categoryNameController = TextEditingController();
+  final TextEditingController _productSearchController = TextEditingController();
+  final TextEditingController _categorySearchController = TextEditingController();
 
   String? _selectedCategoryId;
   late TabController _tabController;
@@ -37,6 +42,12 @@ class _ProductScreenState extends State<ProductScreen>
     _tabController.addListener(() {
       setState(() {});
     });
+    _productSearchController.addListener(() => setState(() {}));
+    _categorySearchController.addListener(() => setState(() {}));
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<ProductProvider>(context, listen: false).loadCategories();
+    });
   }
 
   @override
@@ -44,7 +55,11 @@ class _ProductScreenState extends State<ProductScreen>
     _tabController.dispose();
     _nameController.dispose();
     _priceController.dispose();
+    _descriptionController.dispose();
+    _imageUrlController.dispose();
     _categoryNameController.dispose();
+    _productSearchController.dispose();
+    _categorySearchController.dispose();
     super.dispose();
   }
 
@@ -71,7 +86,7 @@ class _ProductScreenState extends State<ProductScreen>
             padding: const EdgeInsets.only(right: 16.0),
             child: IconButton(
               icon: Icon(Icons.menu_book_rounded,
-                  color: Colors.deepPurple.shade600, size: 30),
+                  color: Colors.teal.shade600, size: 30),
               tooltip: 'Menü Oluştur',
               onPressed:
                   _isLoading ? null : () => _showMenuGeneratorDialog(context),
@@ -79,47 +94,82 @@ class _ProductScreenState extends State<ProductScreen>
           ),
         ],
 
-        bottom: TabBar(
-          controller: _tabController,
-          indicator: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            color: Colors.deepPurple.shade50,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(60),
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: Colors.grey.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              splashBorderRadius: BorderRadius.circular(12),
+              overlayColor: WidgetStateProperty.resolveWith<Color?>((states) {
+                if (states.contains(WidgetState.hovered)) {
+                  return Colors.teal.withValues(alpha: 0.05);
+                }
+                if (states.contains(WidgetState.pressed)) {
+                  return Colors.teal.withValues(alpha: 0.1);
+                }
+                return Colors.transparent;
+              }),
+              indicator: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              labelColor: Colors.teal.shade700,
+              unselectedLabelColor: Colors.grey[500],
+              labelStyle: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                letterSpacing: 0.5,
+              ),
+              dividerColor: Colors.transparent,
+              indicatorSize: TabBarIndicatorSize.tab,
+              tabs: const [
+                Tab(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.inventory_2_rounded, size: 20),
+                      SizedBox(width: 8),
+                      Text('Ürünler'),
+                    ],
+                  ),
+                ),
+                Tab(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.folder_special_rounded, size: 20),
+                      SizedBox(width: 8),
+                      Text('Kategoriler'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-          indicatorPadding:
-              const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          labelColor: Colors.deepPurple.shade700,
-          unselectedLabelColor: Colors.grey[600],
-          labelStyle:
-              const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-          tabs: const [
-            Tab(
-                child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                  Icon(Icons.inventory_2_rounded),
-                  SizedBox(width: 8),
-                  Text('Ürünler')
-                ])),
-            Tab(
-                child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                  Icon(Icons.folder_special_rounded),
-                  SizedBox(width: 8),
-                  Text('Kategoriler')
-                ])),
-          ],
         ),
       ),
       body: _isLoading
-          ? const Center(
+          ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  CircularProgressIndicator(color: Colors.deepPurple),
+                  CircularProgressIndicator(color: Colors.teal),
                   SizedBox(height: 16),
                   Text('İşlem yapılıyor, lütfen bekleyin...',
-                      style: TextStyle(fontSize: 16, color: Colors.deepPurple)),
+                      style: TextStyle(fontSize: 16, color: Colors.teal.shade700)),
                 ],
               ),
             )
@@ -235,8 +285,36 @@ class _ProductScreenState extends State<ProductScreen>
       );
     }
 
+    final query = _productSearchController.text.toLowerCase();
+    final filteredProducts = productProvider.products.where((p) {
+      return p.name.toLowerCase().contains(query);
+    }).toList();
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: _buildSearchField(
+            controller: _productSearchController,
+            hintText: 'Ürün ara...',
+          ),
+        ),
+        Expanded(
+          child: filteredProducts.isEmpty
+              ? _buildEmptyState(
+                  icon: Icons.search_off_rounded,
+                  title: 'Ürün Bulunamadı',
+                  subtitle: 'Arama kriterlerinize uygun ürün bulunamadı.',
+                )
+              : _buildGroupedProductList(filteredProducts, productProvider),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGroupedProductList(List<ProductModel> products, ProductProvider productProvider) {
     final Map<String, List<ProductModel>> productsByCategory = {};
-    for (var product in productProvider.products) {
+    for (var product in products) {
       final categoryName = productProvider.categories
           .firstWhere(
             (c) => c.id == product.categoryId,
@@ -262,11 +340,11 @@ class _ProductScreenState extends State<ProductScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.only(top: 10.0, left: 8.0, bottom: 8.0),
+              padding: const EdgeInsets.only(top: 8.0, left: 4.0, bottom: 4.0),
               child: Text(
                 categoryName,
                 style: const TextStyle(
-                    fontSize: 20,
+                    fontSize: 24,
                     fontWeight: FontWeight.bold,
                     color: Color(0xFF1A1A2E)),
               ),
@@ -286,13 +364,38 @@ class _ProductScreenState extends State<ProductScreen>
         subtitle: 'Yeni bir kategori eklemek için + butonuna tıklayın.',
       );
     }
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-      itemCount: productProvider.categories.length,
-      itemBuilder: (context, index) {
-        final category = productProvider.categories[index];
-        return _buildCategoryItemCard(category, productProvider);
-      },
+
+    final query = _categorySearchController.text.toLowerCase();
+    final filteredCategories = productProvider.categories.where((c) {
+      return c.name.toLowerCase().contains(query);
+    }).toList();
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: _buildSearchField(
+            controller: _categorySearchController,
+            hintText: 'Kategori ara...',
+          ),
+        ),
+        Expanded(
+          child: filteredCategories.isEmpty
+              ? _buildEmptyState(
+                  icon: Icons.search_off_rounded,
+                  title: 'Kategori Bulunamadı',
+                  subtitle: 'Arama kriterlerinize uygun kategori bulunamadı.',
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
+                  itemCount: filteredCategories.length,
+                  itemBuilder: (context, index) {
+                    final category = filteredCategories[index];
+                    return _buildCategoryItemCard(category, productProvider);
+                  },
+                ),
+        ),
+      ],
     );
   }
 
@@ -300,24 +403,26 @@ class _ProductScreenState extends State<ProductScreen>
 
   Widget _buildProductItemCard(ProductModel product) {
     return Card(
-      elevation: 2,
-      shadowColor: Colors.black.withOpacity(0.1),
-      margin: const EdgeInsets.symmetric(vertical: 6.0),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      color: Colors.white,
+      elevation: 1,
+      shadowColor: Colors.black.withOpacity(0.05),
+      margin: const EdgeInsets.symmetric(vertical: 3.0),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 12.0),
+        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.teal.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(14),
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.grey.shade200),
               ),
               child: Icon(Icons.fastfood_rounded,
-                  color: Colors.teal.shade600, size: 28),
+                  color: Colors.teal.shade600, size: 20),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -325,14 +430,14 @@ class _ProductScreenState extends State<ProductScreen>
                   Text(
                     product.name,
                     style: const TextStyle(
-                        fontSize: 17,
+                        fontSize: 20,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF1A1A2E)),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Text(
-                    'Satış Sayısı: ${product.salesCount}',
-                    style: const TextStyle(fontSize: 13, color: Colors.grey),
+                    'Satış: ${product.salesCount}',
+                    style: const TextStyle(fontSize: 15, color: Colors.grey),
                   ),
                 ],
               ),
@@ -341,11 +446,11 @@ class _ProductScreenState extends State<ProductScreen>
               NumberFormat.currency(locale: 'tr_TR', symbol: '₺')
                   .format(product.price),
               style: TextStyle(
-                  fontSize: 18,
+                  fontSize: 22,
                   fontWeight: FontWeight.bold,
                   color: Colors.green.shade700),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 4),
             _buildPopupMenuButton(product),
           ],
         ),
@@ -356,25 +461,28 @@ class _ProductScreenState extends State<ProductScreen>
   Widget _buildCategoryItemCard(
       CategoryModel category, ProductProvider provider) {
     return Card(
-      elevation: 2,
-      shadowColor: Colors.black.withOpacity(0.1),
-      margin: const EdgeInsets.symmetric(vertical: 6.0),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      color: Colors.white,
+      elevation: 1,
+      shadowColor: Colors.black.withOpacity(0.05),
+      margin: const EdgeInsets.symmetric(vertical: 3.0),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ListTile(
+        visualDensity: VisualDensity.compact,
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+            const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
         leading: Container(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.orange.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(14),
+            color: Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.grey.shade200),
           ),
           child: Icon(Icons.folder_special_rounded,
-              color: Colors.orange.shade700, size: 28),
+              color: Colors.teal.shade700, size: 20),
         ),
         title: Text(
           category.name,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         trailing: _buildCategoryPopupMenuButton(category, provider),
       ),
@@ -466,6 +574,8 @@ class _ProductScreenState extends State<ProductScreen>
     _nameController.text = product?.name ?? '';
     _priceController.text =
         product != null ? product.price.toStringAsFixed(2) : '';
+    _descriptionController.text = product?.description ?? '';
+    _imageUrlController.text = product?.imageUrl ?? '';
     _selectedCategoryId = product?.categoryId;
 
     _showStyledDialog(
@@ -489,10 +599,90 @@ class _ProductScreenState extends State<ProductScreen>
               hintText: 'Örn: 150.00',
               keyboardType: TextInputType.number,
             ),
+            // Şimdilik ürün açıklaması ve GastroQR resim bağlantısı gizlendi
+            /*
+            const SizedBox(height: 16),
+            _buildStyledTextField(
+              controller: _descriptionController,
+              labelText: 'Ürün Açıklaması (GastroQR)',
+              hintText: 'Örn: Çift shot espresso...',
+            ),
+            const SizedBox(height: 16),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: _buildStyledTextField(
+                    controller: _imageUrlController,
+                    labelText: 'GastroQR Resim Bağlantısı',
+                    hintText: 'Örn: https://images.unsplash.com/...',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                StatefulBuilder(builder: (context, setInnerState) {
+                  bool isUploading = false;
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.teal.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: IconButton(
+                      onPressed: isUploading
+                          ? null
+                          : () async {
+                              final picker = ImagePicker();
+                              final XFile? image = await picker.pickImage(
+                                source: ImageSource.gallery,
+                                imageQuality: 70,
+                              );
+                              if (image != null) {
+                                setInnerState(() => isUploading = true);
+                                try {
+                                  final url = await productProvider.uploadImage(
+                                      File(image.path),
+                                      product?.id ??
+                                          "new_product_${DateTime.now().millisecondsSinceEpoch}");
+                                  if (url != null) {
+                                    setStateSB(() {
+                                      _imageUrlController.text = url;
+                                    });
+                                    _showSnackBar('Resim başarıyla yüklendi.',
+                                        isSuccess: true);
+                                  } else {
+                                    _showSnackBar('Resim yüklenemedi.',
+                                        isSuccess: false);
+                                  }
+                                } finally {
+                                  if (context.mounted) {
+                                    setInnerState(() => isUploading = false);
+                                  }
+                                }
+                              }
+                            },
+                      icon: isUploading
+                          ? SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.teal.shade700,
+                              ))
+                          : Icon(Icons.add_a_photo_rounded,
+                              color: Colors.teal.shade700),
+                      tooltip: 'Resim Yükle',
+                    ),
+                  );
+                }),
+              ],
+            ),
+            */
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
               decoration: _styledInputDecoration('Kategori'),
-              hint: const Text('Bir kategori seçin'),
+              hint: Text(productProvider.categories.isEmpty
+                  ? 'Henüz kategori yok (İsteğe bağlı)'
+                  : 'Bir kategori seçin'),
               value: _selectedCategoryId,
               items: productProvider.categories.map((category) {
                 return DropdownMenuItem(
@@ -503,8 +693,12 @@ class _ProductScreenState extends State<ProductScreen>
               onChanged: (String? newValue) {
                 setStateSB(() => _selectedCategoryId = newValue);
               },
-              validator: (value) =>
-                  value == null ? 'Lütfen bir kategori seçin.' : null,
+              validator: (value) {
+                if (productProvider.categories.isNotEmpty && value == null) {
+                  return 'Lütfen bir kategori seçin.';
+                }
+                return null;
+              },
             ),
           ],
         );
@@ -522,21 +716,31 @@ class _ProductScreenState extends State<ProductScreen>
           onPressed: () {
             final name = _nameController.text.trim();
             final price = double.tryParse(_priceController.text);
-            if (name.isNotEmpty &&
-                price != null &&
-                price > 0 &&
-                _selectedCategoryId != null) {
+            final desc = _descriptionController.text.trim();
+            final imgUrl = _imageUrlController.text.trim();
+            if (name.isNotEmpty && price != null && price > 0) {
+              if (productProvider.categories.isNotEmpty &&
+                  _selectedCategoryId == null) {
+                _showSnackBar('Lütfen bir kategori seçin.', isSuccess: false);
+                return;
+              }
+              final String catId = _selectedCategoryId ?? '';
               if (product == null) {
-                productProvider.addProduct(name, price, _selectedCategoryId!);
+                productProvider.addProduct(name, price, catId,
+                    description: desc, imageUrl: imgUrl);
               } else {
                 product.name = name;
                 product.price = price;
-                product.categoryId = _selectedCategoryId!;
+                product.categoryId = catId;
+                product.description = desc;
+                product.imageUrl = imgUrl;
                 productProvider.updateProduct(product);
               }
               Navigator.of(context).pop();
               _nameController.clear();
               _priceController.clear();
+              _descriptionController.clear();
+              _imageUrlController.clear();
               _selectedCategoryId = null;
               _showSnackBar(
                   product == null
@@ -612,36 +816,49 @@ class _ProductScreenState extends State<ProductScreen>
       required String title,
       required String subtitle}) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(32),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade200,
-              shape: BoxShape.circle,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.03),
+                    blurRadius: 20,
+                    spreadRadius: 5,
+                  ),
+                ],
+              ),
+              child: Icon(icon, size: 64, color: Colors.grey[300]),
             ),
-            child: Icon(icon, size: 80, color: Colors.grey[400]),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            title,
-            style: TextStyle(
-                fontSize: 22,
-                color: Colors.grey[700],
-                fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            subtitle,
-            style: TextStyle(
-                fontSize: 16,
+            const SizedBox(height: 32),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 20,
+                color: Color(0xFF1A1A2E),
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 15,
                 color: Colors.grey[500],
-                fontWeight: FontWeight.w500),
-            textAlign: TextAlign.center,
-          ),
-        ],
+                fontWeight: FontWeight.w400,
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -662,44 +879,47 @@ class _ProductScreenState extends State<ProductScreen>
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           elevation: 8,
           child: Container(
-            padding: const EdgeInsets.all(28),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [iconColor.withOpacity(0.8), iconColor],
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: iconColor.withOpacity(0.3),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
+            constraints: const BoxConstraints(maxWidth: 520),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [iconColor.withOpacity(0.8), iconColor],
                       ),
-                    ],
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: iconColor.withOpacity(0.3),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Icon(icon, size: 44, color: Colors.white),
                   ),
-                  child: Icon(icon, size: 58, color: Colors.white),
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 22,
-                      color: Color(0xFF1A1A2E)),
-                ),
-                const SizedBox(height: 20),
-                content,
-                const SizedBox(height: 28),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: actions,
-                ),
-              ],
+                  const SizedBox(height: 14),
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                        color: Color(0xFF1A1A2E)),
+                  ),
+                  const SizedBox(height: 16),
+                  content,
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: actions,
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -749,6 +969,40 @@ class _ProductScreenState extends State<ProductScreen>
       controller: controller,
       keyboardType: keyboardType,
       decoration: _styledInputDecoration(labelText, hintText: hintText),
+    );
+  }
+
+  Widget _buildSearchField({
+    required TextEditingController controller,
+    required String hintText,
+  }) {
+    return TextField(
+      controller: controller,
+      decoration: InputDecoration(
+        hintText: hintText,
+        prefixIcon: const Icon(Icons.search_rounded, color: Colors.grey, size: 20),
+        suffixIcon: controller.text.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.clear_rounded, color: Colors.grey, size: 18),
+                onPressed: () => controller.clear(),
+              )
+            : null,
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.withOpacity(0.2)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.withOpacity(0.1)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.deepPurple.shade300, width: 1.5),
+        ),
+      ),
     );
   }
 

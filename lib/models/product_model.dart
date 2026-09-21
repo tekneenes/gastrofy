@@ -6,6 +6,8 @@ class ProductModel {
   int salesCount;
   // EKLENDİ
   String categoryId;
+  String description;
+  String imageUrl;
 
   ProductModel({
     required this.id,
@@ -14,6 +16,8 @@ class ProductModel {
     this.salesCount = 0,
     // EKLENDİ
     required this.categoryId,
+    this.description = '',
+    this.imageUrl = '',
   });
 
   factory ProductModel.fromMap(Map<String, dynamic> map) {
@@ -24,6 +28,8 @@ class ProductModel {
       salesCount: map['salesCount'] ?? 0,
       // EKLENDİ (Veritabanında yoksa boş string olmalı)
       categoryId: map['categoryId'] ?? '',
+      description: map['description'] ?? '',
+      imageUrl: map['imageUrl'] ?? '',
     );
   }
 
@@ -35,6 +41,8 @@ class ProductModel {
       'salesCount': salesCount,
       // EKLENDİ
       'categoryId': categoryId,
+      'description': description,
+      'imageUrl': imageUrl,
     };
   }
 }

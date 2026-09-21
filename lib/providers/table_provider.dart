@@ -1,56 +1,94 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/table_model.dart';
 import '../models/order_model.dart';
 import '../models/order_item_model.dart';
+import '../models/table_record_model.dart';
+import '../screens/veresiye_screen.dart'; // VeresiyeModel here
 import '../services/database_helper.dart';
+import '../services/local_sync_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:sqflite/sqflite.dart';
 
 enum TableViewMode {
-// ... (varolan enum) ...
-  two,
-  three,
-  four,
-  five,
   list,
   grid2,
   grid3,
-  gridSmall,
-  smallGrid,
-  gridFive,
-  gridFour,
-  gridThree,
-  gridTwo
+  grid4,
+  grid5
+}
+
+enum SyncRole {
+  none,
+  server, // Cashier/Manager
+  client, // Waiter
 }
 
 class TableProvider with ChangeNotifier {
-  List<TableModel> _tables = [];
-// ... (varolan değişkenler) ...
   final DatabaseHelper _databaseHelper = DatabaseHelper.instance;
+  final _syncService = LocalSyncService.instance;
+  
+  bool _isSyncMode = false;
+  String? _syncServerIp;
+  SyncRole _syncRole = SyncRole.none;
 
   String _currentFilter = 'Tüm Masalar';
-// ... (varolan değişkenler) ...
-  TableViewMode _viewMode = TableViewMode.two;
+  List<TableModel> _tables = [];
+  List<Map<String, dynamic>> _sections = [];
+  String? _selectedSectionId;
+  List<TableRecordModel> _tableRecords = [];
+  List<VeresiyeModel> _veresiyeRecords = [];
+  
+  TableViewMode _viewMode = TableViewMode.grid2;
   bool _showActiveTablesInfo = true;
-// ... (varolan değişkenler) ...
   bool _showDailyRevenueInfo = true;
+  Map<String, dynamic>? _lastLog = {
+    'userName': 'Sistem',
+    'actionType': 'Hazır',
+    'details': 'Sistem Hazır ve Bağlı',
+    'timestamp': DateTime.now().toIso8601String(),
+  }; // VAROLAN: Son işlem logu (Varsayılan eklendi)
 
   double _todayTotalRevenue = 0.0;
-// ... (varolan değişkenler) ...
-  final DatabaseHelper _dbHelper = DatabaseHelper.instance;
-
   bool _isLoading = false;
 // ... (varolan değişkenler) ...
   bool get isLoading => _isLoading;
+  List<Map<String, dynamic>> get sections => _sections;
+  String? get selectedSectionId => _selectedSectionId;
+  bool get isSyncMode => _isSyncMode;
+  SyncRole get syncRole => _syncRole;
+  String? get syncServerIp => _syncServerIp;
 
   Future<void> initialize() async {
-// ... (varolan initialize) ...
     _isLoading = true;
     notifyListeners();
 
+    await _loadSyncSettings();
     await _loadSettings();
-    await _loadTables();
-    await _loadTodayRevenue();
+    await _loadViewMode();
+    
+    if (_isSyncMode && _syncRole == SyncRole.client) {
+      await refreshTables(); // Client ise sunucudan çek
+      _startSyncTimer(); // Tıkır tıkır yenilemeyi başlat
+    } else {
+      // SERVER veya NORMAL mod
+      if (_isSyncMode && _syncRole == SyncRole.server) {
+        // Otomatik sunucu başlatma
+        final serverIp = await _syncService.startServer();
+        if (serverIp != null) {
+          _syncServerIp = serverIp;
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('syncServerIp', serverIp);
+        }
+      }
+      
+      await _loadSections();
+      await _loadTables();
+      await _loadTodayRevenue();
+      await loadTableRecords();
+      await loadVeresiyeRecords();
+    }
 
     _isLoading = false;
     notifyListeners();
@@ -66,10 +104,12 @@ class TableProvider with ChangeNotifier {
 // ... (varolan getter'lar) ...
   double get todayTotalRevenue => _todayTotalRevenue;
   double get dailyTotalRevenue => _todayTotalRevenue;
+  Map<String, dynamic>? get lastLog => _lastLog;
+  List<TableRecordModel> get tableRecords => _tableRecords;
+  List<VeresiyeModel> get veresiyeRecords => _veresiyeRecords;
 
   TableProvider() {
-// ... (varolan constructor) ...
-    initialize();
+    // initialize() artık dışarıdan (HomeScreen'den) kontrollü çağrılıyor
   }
 
   Future<void> _loadSettings() async {
@@ -131,27 +171,115 @@ class TableProvider with ChangeNotifier {
   }
 
   Future<void> _loadTodayRevenue() async {
-// ... (varolan _loadTodayRevenue) ...
-    _todayTotalRevenue = await _dbHelper.getTodayRevenue();
+    _todayTotalRevenue = await _databaseHelper.getTodayRevenue();
     notifyListeners();
   }
 
   Future<void> loadTables() async {
-// ... (varolan loadTables) ...
-    _tables = await _dbHelper.getTables();
+    _tables = await _databaseHelper.getTables();
     notifyListeners();
   }
 
   Future<void> init() async {
-// ... (varolan init) ...
-    await loadTables();
-    await _loadTodayRevenue();
+    await initialize();
   }
 
+  Timer? _syncTimer;
+
   Future<void> refreshTables() async {
-// ... (varolan refreshTables) ...
-    await _loadTables();
-    await loadTodayRevenue();
+    if (_isSyncMode && _syncRole == SyncRole.client && _syncServerIp != null) {
+      final data = await _syncService.fetchFromServer(_syncServerIp!);
+      if (data != null) {
+        _tables = (data['tables'] as List).map((t) => TableModel.fromMap(t)).toList();
+        _sections = List<Map<String, dynamic>>.from(data['sections']);
+        notifyListeners();
+      }
+    } else {
+      await _loadSections();
+      await _loadTables();
+      await loadTodayRevenue();
+    }
+  }
+
+  Future<void> _loadSyncSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    _isSyncMode = prefs.getBool('isSyncMode') ?? false;
+    _syncServerIp = prefs.getString('syncServerIp');
+    final roleIndex = prefs.getInt('syncRole') ?? 0;
+    _syncRole = SyncRole.values[roleIndex];
+  }
+
+  void _startSyncTimer() {
+    _syncTimer?.cancel();
+    if (_isSyncMode && _syncRole == SyncRole.client) {
+      _syncTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+        refreshTables();
+      });
+    }
+  }
+
+  Future<void> setSyncMode({required bool enabled, String? ip, SyncRole role = SyncRole.none}) async {
+    // Eğer mod değişmiyorsa ve IP zaten varsa gereksiz işlemden kaçın
+    if (_isSyncMode == enabled && _syncRole == role && (ip == null || _syncServerIp == ip)) {
+      if (enabled && role == SyncRole.server && _syncServerIp == null) {
+        // IP eksikse sadece IP'yi almaya çalış
+        final localIp = await _syncService.startServer();
+        if (localIp != null) {
+          _syncServerIp = localIp;
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('syncServerIp', localIp);
+          notifyListeners();
+        }
+      }
+      return;
+    }
+
+    _isSyncMode = enabled;
+    _syncServerIp = ip;
+    _syncRole = role;
+    
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isSyncMode', enabled);
+    await prefs.setInt('syncRole', role.index);
+
+    if (enabled && role == SyncRole.server) {
+      final localIp = await _syncService.startServer();
+      if (localIp != null) {
+        _syncServerIp = localIp;
+        await prefs.setString('syncServerIp', localIp);
+      }
+    } else if (!enabled) {
+      await _syncService.stopServer();
+      _syncTimer?.cancel();
+    } else if (enabled && role == SyncRole.client) {
+      if (ip != null) await prefs.setString('syncServerIp', ip);
+    }
+    
+    _startSyncTimer();
+    
+    // Sadece gerekli olduğunda tam initialize yap (örn. mod değiştiğinde)
+    await initialize();
+  }
+
+  Future<void> _loadSections() async {
+    _sections = await _databaseHelper.getSections();
+    
+    // Eğer "Genel" (default_section) yoksa, listeye en başa ekleyelim veya veritabanına ekleyelim
+    bool hasDefault = _sections.any((s) => s['id'] == 'default_section');
+    if (!hasDefault) {
+      // Veritabanına tekrar eklemeyi dene (eğer silindiyse)
+      final db = await _databaseHelper.database;
+      await db.insert('table_sections', {
+        'id': 'default_section',
+        'name': 'Genel',
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      _sections = await _databaseHelper.getSections();
+    }
+
+    if (_sections.isNotEmpty && _selectedSectionId == null) {
+      _selectedSectionId = 'default_section';
+    }
+    notifyListeners();
   }
 
   Future<void> _loadTables() async {
@@ -176,24 +304,22 @@ class TableProvider with ChangeNotifier {
   }
 
   Future<void> cycleViewMode() async {
-// ... (varolan cycleViewMode) ...
-    final currentModeIndex = _viewMode.index;
-    final nextModeIndex = (currentModeIndex + 1) % TableViewMode.values.length;
-    _viewMode = TableViewMode.values[nextModeIndex];
-    await _saveViewMode(); // Yeni seçimi kaydet
+    const modes = TableViewMode.values;
+    final currentIndex = modes.indexOf(_viewMode);
+    final nextIndex = (currentIndex + 1) % modes.length;
+    _viewMode = modes[nextIndex];
     notifyListeners();
+    _saveViewMode();
   }
 
   Future<void> _saveViewMode() async {
-// ... (varolan _saveViewMode) ...
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('tableViewMode', _viewMode.index);
+    await prefs.setInt('saved_view_mode', _viewMode.index);
   }
 
   Future<void> _loadViewMode() async {
-// ... (varolan _loadViewMode) ...
     final prefs = await SharedPreferences.getInstance();
-    final savedIndex = prefs.getInt('tableViewMode');
+    final savedIndex = prefs.getInt('saved_view_mode');
     if (savedIndex != null && savedIndex < TableViewMode.values.length) {
       _viewMode = TableViewMode.values[savedIndex];
     }
@@ -228,7 +354,13 @@ class TableProvider with ChangeNotifier {
   }
 
   Future<void> addTable(TableModel newTable) async {
-// ... (varolan kod) ...
+    int maxPosition = -1;
+    for (var table in _tables) {
+      if (table.position > maxPosition) {
+        maxPosition = table.position;
+      }
+    }
+    newTable.position = maxPosition + 1;
     await _databaseHelper.insertTable(newTable);
     await _loadTables();
   }
@@ -251,33 +383,55 @@ class TableProvider with ChangeNotifier {
     await _loadTables();
   }
 
-  Future<void> deleteTable(String id) async {
-// ... (varolan kod) ...
+  Future<void> deleteTable(String id, {required Map<String, dynamic> user}) async {
     TableModel tableToDelete = _tables.firstWhere((t) => t.id == id);
-    await clearTable(tableToDelete.id, addToRevenue: true);
+    await clearTable(tableToDelete.id, addToRevenue: true, user: user);
     await _databaseHelper.deleteTable(id);
     await _loadTables();
   }
 
   Future<void> reorderTables(int oldIndex, int newIndex) async {
-// ... (varolan kod) ...
-    if (oldIndex < newIndex) {
-      newIndex -= 1;
-    }
-    final TableModel movedTable = _tables.removeAt(oldIndex);
-    _tables.insert(newIndex, movedTable);
+    // GÜNCELLENDİ: Sadece ekranda görünen listeyi (filteredTables) baz almalıyız
+    List<TableModel> currentList = filteredTables;
 
-    for (int i = 0; i < _tables.length; i++) {
-      _tables[i].position = i;
+    // MEVCUT POZİSYONLARI SAKLA
+    // Bu masaların mevcut pozisyonlarını alıp sıralıyoruz.
+    // Böylece sadece bu masaların kendi aralarındaki sırasını değiştirmiş olacağız.
+    // Diğer (görünmeyen) masaların pozisyonlarıyla çakışma yaşanmaz.
+    List<int> existingPositions = currentList.map((t) => t.position).toList();
+    existingPositions.sort(); // Küçükten büyüğe sırala (örn: 0, 1, 5, 8...)
+
+    final TableModel movedTable = currentList.removeAt(oldIndex);
+    currentList.insert(newIndex, movedTable);
+
+    // Yeni sıraya göre POZİSYONLARI TEKRAR DAĞIT
+    for (int i = 0; i < currentList.length; i++) {
+        currentList[i].position = existingPositions[i];
     }
-    await _databaseHelper.updateTablePositions(_tables);
+
+    // Global _tables listesini de pozisyona göre tekrar sırala
+    _tables.sort((a, b) => a.position.compareTo(b.position));
+    
+    // UI'ı gecikmesiz güncelle (Optimistic UI Update)
     notifyListeners();
+
+    // Veritabanını arka planda güncelle
+    try {
+      await _databaseHelper.updateTablePositions(currentList);
+    } catch (e) {
+      debugPrint("Hata: Masa sıralaması güncellenemedi: $e");
+    }
   }
 
   Future<void> addOrUpdateOrder(
-// ... (varolan kod) ...
-      String tableId,
-      OrderItem newItemWithoutOrderId) async {
+      String tableId, OrderItem newItemWithoutOrderId,
+      {required Map<String, dynamic> user}) async {
+    if (_isSyncMode && _syncRole == SyncRole.client && _syncServerIp != null) {
+      await _syncService.sendUpdateOrder(_syncServerIp!, tableId, [newItemWithoutOrderId.toMap()], user);
+      await refreshTables();
+      return;
+    }
+    
     TableModel table = _tables.firstWhere((t) => t.id == tableId);
     OrderModel? activeOrder = table.currentOrder;
 
@@ -290,6 +444,13 @@ class TableProvider with ChangeNotifier {
       table.currentOrder = activeOrder;
       table.isOccupied = true;
       table.startTime = now;
+
+      // LOG: Masa Açıldı
+      await addLog(
+        user: user,
+        actionType: 'Masa Aç',
+        details: '${table.name} masası açıldı.',
+      );
     }
 
     newItemWithoutOrderId.orderId = activeOrder.id!;
@@ -305,6 +466,13 @@ class TableProvider with ChangeNotifier {
         item.quantity += newItemWithoutOrderId.quantity;
         await _databaseHelper.updateOrderItem(item);
         itemExists = true;
+
+        // LOG: Ürün Geri Eklendi/Arttırıldı
+        await addLog(
+          user: user,
+          actionType: 'Ürün Ekle',
+          details: '${table.name}: ${item.productName} (+${newItemWithoutOrderId.quantity})',
+        );
         break;
       }
     }
@@ -314,6 +482,13 @@ class TableProvider with ChangeNotifier {
           await _databaseHelper.insertOrderItem(newItemWithoutOrderId);
       newItemWithoutOrderId.id = newOrderItemId;
       table.orders.add(newItemWithoutOrderId);
+
+      // LOG: Yeni Ürün Eklendi
+      await addLog(
+        user: user,
+        actionType: 'Ürün Ekle',
+        details: '${table.name}: ${newItemWithoutOrderId.productName} (${newItemWithoutOrderId.quantity} adet)',
+      );
     }
 
     table.totalRevenue = table.orders
@@ -322,8 +497,8 @@ class TableProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> incrementOrderItem(String tableId, OrderItem item) async {
-// ... (varolan kod) ...
+  Future<void> incrementOrderItem(String tableId, OrderItem item,
+      {required Map<String, dynamic> user}) async {
     item.quantity++;
     await _databaseHelper.updateOrderItem(item);
     TableModel table = _tables.firstWhere((t) => t.id == tableId);
@@ -332,19 +507,39 @@ class TableProvider with ChangeNotifier {
         (sum, orderItem) =>
             sum + (orderItem.productPrice * orderItem.quantity));
     await _databaseHelper.updateTable(table);
+
+    // LOG: Ürün Artış
+    await addLog(
+      user: user,
+      actionType: 'Ürün Ekle',
+      details: '${table.name}: ${item.productName} (+1)',
+    );
+
     notifyListeners();
   }
 
-  Future<void> decrementOrderItem(String tableId, OrderItem item) async {
-// ... (varolan kod) ...
+  Future<void> decrementOrderItem(String tableId, OrderItem item,
+      {required Map<String, dynamic> user}) async {
     TableModel table = _tables.firstWhere((t) => t.id == tableId);
 
     if (item.quantity > 1) {
       item.quantity--;
       await _databaseHelper.updateOrderItem(item);
+      // LOG: Ürün Azalış
+      await addLog(
+        user: user,
+        actionType: 'Ürün Çıkar',
+        details: '${table.name}: ${item.productName} (-1)',
+      );
     } else {
       await _databaseHelper.deleteOrderItem(item.id!);
       table.orders.removeWhere((element) => element.id == item.id);
+      // LOG: Ürün Tamamen Silindi
+      await addLog(
+        user: user,
+        actionType: 'Ürün Çıkar',
+        details: '${table.name}: ${item.productName} silindi.',
+      );
     }
 
     table.totalRevenue = table.orders.fold(
@@ -353,7 +548,6 @@ class TableProvider with ChangeNotifier {
             sum + (orderItem.productPrice * orderItem.quantity));
 
     if (table.orders.isEmpty) {
-// ... (varolan kod) ...
       if (table.currentOrder != null && table.currentOrder!.id != null) {
         await _databaseHelper.deleteMainOrder(table.currentOrder!.id!);
       }
@@ -361,47 +555,72 @@ class TableProvider with ChangeNotifier {
       table.startTime = null;
       table.currentOrder = null;
       table.totalRevenue = 0.0;
+      
+      // LOG: Masa Boşaldı (Ürün kalmadığı için)
+      await addLog(
+        user: user,
+        actionType: 'Masa Kapat',
+        details: '${table.name} masası ürün kalmadığı için kapandı.',
+      );
     }
 
     await _databaseHelper.updateTable(table);
     notifyListeners();
   }
 
-  Future<void> clearTable(String tableId, {bool addToRevenue = true}) async {
-// ... (varolan clearTable) ...
+  Future<void> clearTable(String tableId,
+      {bool addToRevenue = true, required Map<String, dynamic> user}) async {
     final table = _tables.firstWhere((t) => t.id == tableId);
+    final double revenue = table.totalRevenue;
 
     if (addToRevenue && table.totalRevenue > 0) {
-      await _dbHelper.addRevenueToToday(table.totalRevenue);
+      await _databaseHelper.addRevenueToToday(table.totalRevenue);
     }
 
     if (table.currentOrder != null && table.currentOrder!.id != null) {
-// ... (varolan kod) ...
-      await _dbHelper.deleteOrderItemsByOrderId(table.currentOrder!.id!);
-      await _dbHelper.deleteMainOrder(table.currentOrder!.id!);
+      await _databaseHelper.deleteOrderItemsByOrderId(table.currentOrder!.id!);
+      await _databaseHelper.deleteMainOrder(table.currentOrder!.id!);
     }
 
     table.isOccupied = false;
-// ... (varolan kod) ...
     table.startTime = null;
     table.totalRevenue = 0.0;
     table.orders = [];
     table.currentOrder = null;
     table.note = null;
 
-    await _dbHelper.updateTable(table);
+    await _databaseHelper.updateTable(table);
+
+    // LOG: Ödeme Alındı ve Masa Kapatıldı
+    await addLog(
+      user: user,
+      actionType: addToRevenue ? 'Ödeme' : 'Masa Kapat',
+      details: addToRevenue 
+          ? '${table.name} ödemesi alındı: ${revenue.toStringAsFixed(2)} TL'
+          : '${table.name} masası sıfırlandı.',
+    );
 
     notifyListeners();
 
+    // REFRESH RECORDS after table is cleared
+    await loadTableRecords();
+    if (!addToRevenue) {
+      await loadVeresiyeRecords();
+    }
+
     if (addToRevenue) {
-// ... (varolan kod) ...
       await _loadTodayRevenue();
     }
   }
 
   List<TableModel> get filteredTables {
-// ... (varolan filteredTables) ...
-    List<TableModel> sortedTables = List.from(_tables);
+    // Önce seçili bölgeye göre filtrele
+    List<TableModel> sectionTables = _tables;
+    if (_selectedSectionId != null) {
+      sectionTables = _tables.where((t) => t.sectionId == _selectedSectionId).toList();
+    }
+
+    List<TableModel> sortedTables = List.from(sectionTables);
     sortedTables.sort((a, b) => a.position.compareTo(b.position));
     switch (_currentFilter) {
       case 'Dolu Masalar':
@@ -412,6 +631,25 @@ class TableProvider with ChangeNotifier {
       default:
         return sortedTables;
     }
+  }
+
+  void setSelectedSection(String? id) {
+    _selectedSectionId = id;
+    notifyListeners();
+  }
+
+  Future<void> addSection(String name) async {
+    await _databaseHelper.insertSection(name);
+    await _loadSections();
+  }
+
+  Future<void> deleteSection(String id) async {
+    if (id == 'default_section') return; // Varsayılan bölge silinemez
+    await _databaseHelper.deleteSection(id);
+    if (_selectedSectionId == id) {
+      _selectedSectionId = 'default_section';
+    }
+    await refreshTables();
   }
 
   void setFilter(String filter) {
@@ -447,19 +685,22 @@ class TableProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> moveTableData(
-// ... (varolan moveTableData) ...
-      TableModel sourceTable,
-      TableModel destTable) async {
+  Future<void> moveTableData(TableModel sourceTable, TableModel destTable,
+      {required Map<String, dynamic> user}) async {
+    if (_isSyncMode && _syncRole == SyncRole.client && _syncServerIp != null) {
+      // Not: LocalSyncService'e moveTable metodu eklenmişti.
+      await _syncService.sendMoveTable(_syncServerIp!, sourceTable.id, destTable.id, user);
+      await refreshTables();
+      return;
+    }
+
     if (sourceTable.currentOrder != null &&
         sourceTable.currentOrder!.id != null) {
       sourceTable.currentOrder =
           sourceTable.currentOrder!.copyWith(tableId: destTable.id);
-// ... (varolan kod) ...
       await _databaseHelper.updateMainOrder(sourceTable.currentOrder!);
 
       destTable.isOccupied = sourceTable.isOccupied;
-// ... (varolan kod) ...
       destTable.startTime = sourceTable.startTime;
       destTable.totalRevenue = sourceTable.totalRevenue;
       destTable.currentOrder = sourceTable.currentOrder;
@@ -468,31 +709,19 @@ class TableProvider with ChangeNotifier {
       await _databaseHelper.updateTable(destTable);
 
       sourceTable.isOccupied = false;
-// ... (varolan kod) ...
       sourceTable.startTime = null;
       sourceTable.totalRevenue = 0.0;
       sourceTable.orders = [];
       sourceTable.currentOrder = null;
       sourceTable.note = null;
       await _databaseHelper.updateTable(sourceTable);
-    } else {
-// ... (varolan kod) ...
-      destTable.isOccupied = false;
-      destTable.startTime = null;
-      destTable.totalRevenue = 0.0;
-      destTable.orders = [];
-      destTable.currentOrder = null;
-      destTable.note = null;
-      await _databaseHelper.updateTable(destTable);
 
-      sourceTable.isOccupied = false;
-// ... (varolan kod) ...
-      sourceTable.startTime = null;
-      sourceTable.totalRevenue = 0.0;
-      sourceTable.orders = [];
-      sourceTable.currentOrder = null;
-      sourceTable.note = null;
-      await _databaseHelper.updateTable(sourceTable);
+      // LOG: Masa Taşıma
+      await addLog(
+        user: user,
+        actionType: 'Masa Taşı',
+        details: '${sourceTable.name} -> ${destTable.name} taşıma yapıldı.',
+      );
     }
     await _loadTables();
   }
@@ -519,7 +748,6 @@ class TableProvider with ChangeNotifier {
     }
   }
 
-  // YENİ FONKSİYON: Veresiyeden gelen ödemeyi ciroya ekler
   Future<void> addRevenueFromVeresiye(double amount) async {
     if (amount <= 0) return;
 
@@ -527,9 +755,56 @@ class TableProvider with ChangeNotifier {
     _todayTotalRevenue += amount;
 
     // 2. Veritabanındaki kalıcı ciroya ekle
-    await _dbHelper.addRevenueToToday(amount);
+    await _databaseHelper.addRevenueToToday(amount);
 
     // 3. Dinleyicileri (UI) bilgilendir
     notifyListeners();
+  }
+
+  // ---- LOGLAMA YARDIMCISI ----
+  Future<void> addLog({
+    required Map<String, dynamic> user,
+    required String actionType,
+    required String details,
+  }) async {
+    final userName = user['userName'] ?? 'Bilinmeyen';
+    try {
+      await _databaseHelper.insertLog(
+        userName: userName,
+        actionType: actionType,
+        details: details,
+      );
+      
+      _lastLog = {
+        'userName': userName,
+        'actionType': actionType,
+        'details': details,
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+      notifyListeners();
+    } catch (e) {
+      debugPrint("Log eklenirken hata: $e");
+    }
+  }
+
+  // ---- RECORD LOADING METHODS ----
+  Future<void> loadTableRecords() async {
+    try {
+      final data = await _databaseHelper.getClosedOrdersLastSixMonths();
+      _tableRecords = data.map((map) => TableRecordModel.fromSqliteMap(map)).toList();
+      notifyListeners();
+    } catch (e) {
+      debugPrint("Masa kayıtları yüklenirken hata: $e");
+    }
+  }
+
+  Future<void> loadVeresiyeRecords() async {
+    try {
+      final data = await _databaseHelper.getVeresiyeRecords();
+      _veresiyeRecords = data;
+      notifyListeners();
+    } catch (e) {
+      debugPrint("Veresiye kayıtları yüklenirken hata: $e");
+    }
   }
 }

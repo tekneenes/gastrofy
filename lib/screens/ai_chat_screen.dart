@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_gemini/flutter_gemini.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/table_ai_service.dart';
@@ -25,10 +26,7 @@ class _AIChatScreenState extends State<AIChatScreen>
   late AnimationController _thinkingAnimController;
   late Animation<double> _thinkingAnimation;
 
-  String? _geminiApiKey;
   bool _isApiKeyChecking = true;
-  final TextEditingController _apiKeyController = TextEditingController();
-  String? _apiKeyError;
 
   @override
   void initState() {
@@ -55,9 +53,22 @@ class _AIChatScreenState extends State<AIChatScreen>
 
   Future<void> _loadApiKeyAndInit() async {
     final prefs = await SharedPreferences.getInstance();
-    final apiKey = prefs.getString('gemini_api_key');
+    String? apiKey = prefs.getString('groq_api_key') ?? prefs.getString('gemini_api_key');
 
-    if (apiKey != null && apiKey.isNotEmpty) {
+    // Eğer SharedPreferences'ta yoksa .env dosyasından al
+    if (apiKey == null || apiKey.isEmpty) {
+      try {
+        if (dotenv.isInitialized) {
+          apiKey = dotenv.env['GROQ_API_KEY'] ?? dotenv.env['GEMINI_API_KEY'];
+        }
+      } catch (e) {
+        debugPrint("AIChatScreen Dotenv erişim hatası: $e");
+      }
+    }
+
+    apiKey ??= "";
+
+    if (apiKey.isNotEmpty) {
       _initializeServices(apiKey);
     }
 
@@ -68,33 +79,10 @@ class _AIChatScreenState extends State<AIChatScreen>
 
   void _initializeServices(String apiKey) {
     try {
-      Gemini.init(apiKey: apiKey);
       _aiService.setApiKey(apiKey);
-
-      setState(() {
-        _geminiApiKey = apiKey;
-        _apiKeyError = null;
-      });
     } catch (e) {
-      debugPrint("Gemini başlatılırken hata: $e");
-      setState(() {
-        _geminiApiKey = null;
-        _apiKeyError = "API Anahtarı geçersiz veya başlatılamadı.";
-      });
+      debugPrint("AI Servisi başlatılırken hata: $e");
     }
-  }
-
-  Future<void> _resetApiKey() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('gemini_api_key');
-
-    _aiService.setApiKey('');
-
-    setState(() {
-      _geminiApiKey = null;
-      _apiKeyController.clear();
-      _apiKeyError = null;
-    });
   }
 
   Widget _buildLinkText(BuildContext context, String text, String url) {
@@ -125,15 +113,10 @@ class _AIChatScreenState extends State<AIChatScreen>
     _thinkingAnimController.dispose();
     _scrollController.dispose();
     _controller.dispose();
-    _apiKeyController.dispose();
     super.dispose();
   }
 
   void _sendMessage() async {
-    if (_geminiApiKey == null || _geminiApiKey!.isEmpty) {
-      return;
-    }
-
     final text = _controller.text.trim();
     if (text.isEmpty || _isLoading) return;
 
@@ -185,28 +168,18 @@ class _AIChatScreenState extends State<AIChatScreen>
       _scrollToBottom();
       _animateMessageText(assistantMessage);
     } catch (e) {
-      String errorMessage = e.toString();
-      if (e.toString().toLowerCase().contains('api key not valid') ||
-          e.toString().contains('Invalid API Key')) {
-        _resetApiKey();
-        if (mounted) {
-          setState(() =>
-              _apiKeyError = "API Anahtarı geçersiz. Lütfen tekrar girin.");
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            _displayMessages.add(ChatMessage(
-              role: 'system',
-              text: '❌ Bir hata oluştu: $errorMessage',
-              timestamp: DateTime.now(),
-            ));
-            _isLoading = false;
-            _thinkingPhase = '';
-          });
-        }
-        _scrollToBottom();
+      if (mounted) {
+        setState(() {
+          _displayMessages.add(ChatMessage(
+            role: 'system',
+            text: '❌ Bir hata oluştu veya API anahtarı geçersiz.',
+            timestamp: DateTime.now(),
+          ));
+          _isLoading = false;
+          _thinkingPhase = '';
+        });
       }
+      _scrollToBottom();
     }
   }
 
@@ -241,142 +214,7 @@ class _AIChatScreenState extends State<AIChatScreen>
     }
   }
 
-  Widget _buildApiKeyPlaceholder() {
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: Colors.teal.shade50,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.vpn_key_rounded,
-                  size: 40, color: Colors.teal),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'API Anahtarı Gerekli',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1A1A2E),
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Yapay zeka asistanını kullanabilmek için Google Gemini API anahtarına ihtiyacınız var.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 15, color: Colors.black54),
-            ),
-            const SizedBox(height: 32),
-            if (_apiKeyError != null)
-              Container(
-                margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.red.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.red.shade200),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.error_outline,
-                        color: Colors.red.shade700, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _apiKeyError!,
-                        style: TextStyle(color: Colors.red.shade800),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            TextField(
-              controller: _apiKeyController,
-              decoration: InputDecoration(
-                labelText: 'API Anahtarı',
-                hintText: 'Anahtarı buraya yapıştırın...',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Colors.teal, width: 2),
-                ),
-                prefixIcon: const Icon(Icons.password_rounded),
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () async {
-                final newKey = _apiKeyController.text.trim();
-                if (newKey.isEmpty) {
-                  setState(() => _apiKeyError = "Lütfen bir anahtar girin.");
-                  return;
-                }
-
-                final prefs = await SharedPreferences.getInstance();
-                await prefs.setString('gemini_api_key', newKey);
-                _initializeServices(newKey);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.teal,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 2,
-              ),
-              child: const Text(
-                'Kaydet ve Başlat',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ),
-            const SizedBox(height: 30),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.blue.shade100),
-              ),
-              child: Column(
-                children: [
-                  const Text(
-                    'Nasıl API Anahtarı Alırım?',
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold, color: Colors.blueGrey),
-                  ),
-                  const SizedBox(height: 8),
-                  _buildLinkText(
-                    context,
-                    "1. Google AI Studio'ya gidin.",
-                    'https://aistudio.google.com/app/apikey',
-                  ),
-                  const SizedBox(height: 4),
-                  const Text("2. 'Create API key' butonuna tıklayın.",
-                      style: TextStyle(fontSize: 13, color: Colors.blueGrey)),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  // Manual API Key entry UI removed.
 
   @override
   Widget build(BuildContext context) {
@@ -397,8 +235,6 @@ class _AIChatScreenState extends State<AIChatScreen>
         ),
       );
     }
-
-    final bool hasApiKey = _geminiApiKey != null && _geminiApiKey!.isNotEmpty;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
@@ -444,82 +280,57 @@ class _AIChatScreenState extends State<AIChatScreen>
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-          if (hasApiKey) ...[
-            IconButton(
-              icon: const Icon(Icons.refresh_rounded, size: 26),
-              onPressed: () {
-                setState(() {
-                  _displayMessages.clear();
-                  _chatHistory.clear();
-                  _displayMessages.add(ChatMessage(
-                    role: 'assistant',
-                    text:
-                        'Merhaba! 👋 Ben Table Intelligence. Size nasıl yardımcı olabilirim?',
-                    timestamp: DateTime.now(),
-                  ));
-                });
-              },
-              tooltip: 'Sohbeti Sıfırla',
-            ),
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.vpn_key, color: Colors.white),
-              onSelected: (value) {
-                if (value == 'reset') {
-                  _resetApiKey();
-                }
-              },
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'reset',
-                  child: Row(
-                    children: [
-                      Icon(Icons.delete_outline, color: Colors.red),
-                      SizedBox(width: 8),
-                      Text("Anahtarı Sil / Değiştir"),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded, size: 26),
+            onPressed: () {
+              setState(() {
+                _displayMessages.clear();
+                _chatHistory.clear();
+                _displayMessages.add(ChatMessage(
+                  role: 'assistant',
+                  text:
+                      'Merhaba! 👋 Ben Table Intelligence. Size nasıl yardımcı olabilirim?',
+                  timestamp: DateTime.now(),
+                ));
+              });
+            },
+            tooltip: 'Sohbeti Sıfırla',
+          ),
           const SizedBox(width: 8),
         ],
       ),
-      body: hasApiKey
-          ? Column(
-              children: [
-                Container(
-                  height: 8,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Colors.teal, Colors.teal.withOpacity(0)],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: ListView.builder(
-                    controller: _scrollController,
-                    reverse: true,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 16),
-                    itemCount: _displayMessages.length + (_isLoading ? 1 : 0),
-                    itemBuilder: (context, index) {
-                      if (_isLoading && index == 0) {
-                        return _buildThinkingIndicator();
-                      }
-                      final messageIndex = _isLoading ? index - 1 : index;
-                      final message = _displayMessages[
-                          _displayMessages.length - 1 - messageIndex];
-                      return _buildMessageBubble(message);
-                    },
-                  ),
-                ),
-                _buildInputArea(),
-              ],
-            )
-          : _buildApiKeyPlaceholder(),
+      body: Column(
+        children: [
+          Container(
+            height: 8,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.teal, Colors.teal.withOpacity(0)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              controller: _scrollController,
+              reverse: true,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              itemCount: _displayMessages.length + (_isLoading ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (_isLoading && index == 0) {
+                  return _buildThinkingIndicator();
+                }
+                final messageIndex = _isLoading ? index - 1 : index;
+                final message = _displayMessages[
+                    _displayMessages.length - 1 - messageIndex];
+                return _buildMessageBubble(message);
+              },
+            ),
+          ),
+          _buildInputArea(),
+        ],
+      ),
     );
   }
 
@@ -759,8 +570,6 @@ class _AIChatScreenState extends State<AIChatScreen>
   }
 
   Widget _buildInputArea() {
-    final bool isApiKeySet = _geminiApiKey != null && _geminiApiKey!.isNotEmpty;
-
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -785,9 +594,7 @@ class _AIChatScreenState extends State<AIChatScreen>
                 child: Container(
                   constraints: const BoxConstraints(maxHeight: 120),
                   decoration: BoxDecoration(
-                    color: isApiKeySet
-                        ? Colors.grey.shade50
-                        : Colors.grey.shade200,
+                    color: Colors.grey.shade50,
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(color: Colors.grey.shade200, width: 1.5),
                   ),
@@ -797,17 +604,13 @@ class _AIChatScreenState extends State<AIChatScreen>
                     maxLines: 5,
                     keyboardType: TextInputType.multiline,
                     textInputAction: TextInputAction.send,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w500,
-                      color: isApiKeySet
-                          ? const Color(0xFF1A1A2E)
-                          : Colors.grey.shade700,
+                      color: Color(0xFF1A1A2E),
                     ),
                     decoration: InputDecoration(
-                      hintText: isApiKeySet
-                          ? "Asistana bir şeyler sorun..."
-                          : "Önce API anahtarını ayarlayın...",
+                      hintText: "Asistana bir şeyler sorun...",
                       hintStyle: TextStyle(
                         color: Colors.grey.shade400,
                         fontSize: 15,
@@ -821,9 +624,7 @@ class _AIChatScreenState extends State<AIChatScreen>
                       prefixIcon: Padding(
                         padding: const EdgeInsets.only(left: 12, right: 8),
                         child: Icon(
-                          isApiKeySet
-                              ? Icons.chat_bubble_outline_rounded
-                              : Icons.lock_outline_rounded,
+                          Icons.chat_bubble_outline_rounded,
                           color: Colors.grey.shade400,
                           size: 22,
                         ),
@@ -831,7 +632,7 @@ class _AIChatScreenState extends State<AIChatScreen>
                       prefixIconConstraints: const BoxConstraints(minWidth: 0),
                     ),
                     onSubmitted: (_) => _sendMessage(),
-                    enabled: !_isLoading && isApiKeySet,
+                    enabled: !_isLoading,
                   ),
                 ),
               ),
@@ -839,7 +640,7 @@ class _AIChatScreenState extends State<AIChatScreen>
               AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
                 decoration: BoxDecoration(
-                  gradient: _isLoading || !isApiKeySet
+                  gradient: _isLoading
                       ? LinearGradient(
                           colors: [Colors.grey.shade400, Colors.grey.shade500])
                       : LinearGradient(
@@ -848,7 +649,7 @@ class _AIChatScreenState extends State<AIChatScreen>
                           end: Alignment.bottomRight,
                         ),
                   shape: BoxShape.circle,
-                  boxShadow: _isLoading || !isApiKeySet
+                  boxShadow: _isLoading
                       ? []
                       : [
                           BoxShadow(
@@ -861,7 +662,7 @@ class _AIChatScreenState extends State<AIChatScreen>
                 child: Material(
                   color: Colors.transparent,
                   child: InkWell(
-                    onTap: _isLoading || !isApiKeySet ? null : _sendMessage,
+                    onTap: _isLoading ? null : _sendMessage,
                     borderRadius: BorderRadius.circular(28),
                     child: Container(
                       width: 56,
@@ -877,10 +678,8 @@ class _AIChatScreenState extends State<AIChatScreen>
                                     AlwaysStoppedAnimation<Color>(Colors.white),
                               ),
                             )
-                          : Icon(
-                              isApiKeySet
-                                  ? Icons.send_rounded
-                                  : Icons.key_rounded,
+                          : const Icon(
+                              Icons.send_rounded,
                               color: Colors.white,
                               size: 24),
                     ),

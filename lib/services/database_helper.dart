@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:path/path.dart';
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:intl/intl.dart';
 
@@ -15,8 +16,8 @@ import '../models/category_model.dart'; // YENİ: Kategori modelini ekledik
 class DatabaseHelper {
   static Database? _database;
   static const _databaseName = "masa_takip_app.db";
-  // Veritabanı sürümünü 9'a yükseltiyoruz (Veresiye tablosu için)
-  static const _databaseVersion = 10;
+  // Veritabanı sürümünü 13'e yükseltiyoruz (Ürün Resimleri ve Acıklamalar için)
+  static const _databaseVersion = 13;
 
   // Tablo isimleri
   static const tableTables = 'tables';
@@ -28,6 +29,8 @@ class DatabaseHelper {
   static const tableClosedOrders = 'closed_orders';
   // YENİ TABLO: Veresiye kayıtları için eklendi
   static const tableVeresiye = 'veresiye_kayitlari';
+  static const tableSections = 'table_sections'; // YENİ: Masa bölgeleri tablosu
+  static const tableAppLogs = 'app_logs'; // YENİ: İşlem geçmişi tablosu
 
   DatabaseHelper._privateConstructor();
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
@@ -67,7 +70,8 @@ class DatabaseHelper {
         startTime TEXT,
         totalRevenue REAL NOT NULL DEFAULT 0.0,
         position INTEGER NOT NULL DEFAULT 0,
-        note TEXT
+        note TEXT,
+        sectionId TEXT -- YENİ: Bölge ID alanı
       )
     ''');
 
@@ -78,7 +82,9 @@ class DatabaseHelper {
         name TEXT NOT NULL,
         price REAL NOT NULL,
         salesCount INTEGER NOT NULL DEFAULT 0,
-        categoryId TEXT NOT NULL DEFAULT ''
+        categoryId TEXT NOT NULL DEFAULT '',
+        description TEXT NOT NULL DEFAULT '',
+        imageUrl TEXT NOT NULL DEFAULT ''
       )
     ''');
 
@@ -131,16 +137,28 @@ class DatabaseHelper {
       )
     ''');
 
-    // YENİ: Veresiye tablosu
+    // YENİ: Masa Bölümleri (Sekmeler) tablosu
     await db.execute('''
-      CREATE TABLE $tableVeresiye (
+      CREATE TABLE IF NOT EXISTS $tableSections (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL
+      )
+    ''');
+    
+    // Varsayılan bir bölge oluştur (Genel)
+    await db.insert(tableSections, {
+      'id': 'default_section',
+      'name': 'Genel',
+    });
+
+    // İşlem Günlükleri (Logs) tablosu
+    await db.execute('''
+      CREATE TABLE $tableAppLogs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        customerName TEXT NOT NULL,
-        totalAmount REAL NOT NULL,
-        itemsJson TEXT NOT NULL,
-        note TEXT,
-        date TEXT NOT NULL,
-        isPaid INTEGER NOT NULL DEFAULT 0
+        userName TEXT NOT NULL,
+        actionType TEXT NOT NULL,
+        details TEXT NOT NULL,
+        timestamp TEXT NOT NULL
       )
     ''');
   }
@@ -204,6 +222,50 @@ class DatabaseHelper {
         )
       ''');
     }
+
+    if (oldVersion < 11) {
+      // Masa Bölümleri tablosunu oluştur
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS $tableSections (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL
+        )
+      ''');
+      
+      // Mevcut masalar tablosuna sectionId ekle
+      try {
+        await db.execute("ALTER TABLE $tableTables ADD COLUMN sectionId TEXT;");
+      } catch (e) {
+        print("sectionId sütunu zaten mevcut olabilir: $e");
+      }
+      
+      // Varsayılan bir bölge oluştur (Genel)
+      const String defaultSectionId = 'default_section';
+      await db.insert(tableSections, {
+        'id': defaultSectionId,
+        'name': 'Genel',
+      });
+      
+      // Mevcut tüm masaları bu bölgeye ata
+      await db.update(tableTables, {'sectionId': defaultSectionId});
+    }
+
+    if (oldVersion < 12) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS $tableAppLogs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          userName TEXT NOT NULL,
+          actionType TEXT NOT NULL,
+          details TEXT NOT NULL,
+          timestamp TEXT NOT NULL
+        )
+      ''');
+    }
+
+    if (oldVersion < 13) {
+      await db.execute("ALTER TABLE $tableProducts ADD COLUMN description TEXT NOT NULL DEFAULT '';");
+      await db.execute("ALTER TABLE $tableProducts ADD COLUMN imageUrl TEXT NOT NULL DEFAULT '';");
+    }
   }
 
   // ---- Masa CRUD İşlemleri ----
@@ -245,7 +307,7 @@ class DatabaseHelper {
         final table = tables[i];
         await txn.update(
           tableTables,
-          {'position': i},
+          {'position': table.position},
           where: 'id = ?',
           whereArgs: [table.id],
         );
@@ -253,13 +315,28 @@ class DatabaseHelper {
     });
   }
 
-  Future<int> deleteTable(String id) async {
+  Future<int> deleteTable(String id) async { // ADDED: Missing deleteTable method
     Database db = await instance.database;
     return await db.delete(
       tableTables,
       where: 'id = ?',
       whereArgs: [id],
     );
+  }
+
+  Future<void> clearTable(String tableId) async {
+    final activeOrder = await getActiveOrderByTableId(tableId);
+    if (activeOrder != null && activeOrder.id != null) {
+      await deleteMainOrder(activeOrder.id!);
+    }
+  }
+
+  Future<void> moveTable(String fromId, String toId) async {
+    final activeOrder = await getActiveOrderByTableId(fromId);
+    if (activeOrder != null) {
+      final updatedOrder = activeOrder.copyWith(tableId: toId);
+      await updateMainOrder(updatedOrder);
+    }
   }
 
   // --- Ürün CRUD İşlemleri ---
@@ -299,25 +376,22 @@ class DatabaseHelper {
   // ProductProvider'da bu metotlara ihtiyaç duyulduğu varsayılıyor
   Future<int> insertCategory(CategoryModel category) async {
     final db = await database;
-    // CategoryModel'de toMap() metodu olduğu varsayılıyor
-    return await db.insert(tableCategories, (category as dynamic).toMap());
+    return await db.insert(tableCategories, category.toJson());
   }
 
   Future<List<CategoryModel>> getCategories() async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query(tableCategories);
     return List.generate(maps.length, (i) {
-      // CategoryModel'de fromMap() metodu olduğu varsayılıyor
-      return (CategoryModel as dynamic).fromMap(maps[i]);
+      return CategoryModel.fromJson(maps[i]);
     });
   }
 
   Future<int> updateCategory(CategoryModel category) async {
     final db = await database;
-    // CategoryModel'de toMap() metodu olduğu varsayılıyor
     return await db.update(
       tableCategories,
-      (category as dynamic).toMap(),
+      category.toJson(),
       where: 'id = ?',
       whereArgs: [category.id],
     );
@@ -333,6 +407,48 @@ class DatabaseHelper {
   }
   // --- Kategori CRUD İşlemleri Sonu ---
 
+  // --- Masa Bölümleri (Section) CRUD İşlemleri ---
+  Future<int> insertSection(String name) async {
+    final db = await database;
+    final id = DateTime.now().millisecondsSinceEpoch.toString();
+    return await db.insert(tableSections, {
+      'id': id,
+      'name': name,
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> getSections() async {
+    final db = await database;
+    return await db.query(tableSections);
+  }
+
+  Future<int> updateSection(String id, String name) async {
+    final db = await database;
+    return await db.update(
+      tableSections,
+      {'name': name},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<int> deleteSection(String id) async {
+    final db = await database;
+    // Bu bölgedeki masaları 'default_section' bölgesine taşıyalım.
+    await db.update(
+      tableTables,
+      {'sectionId': 'default_section'},
+      where: 'sectionId = ?',
+      whereArgs: [id],
+    );
+    
+    return await db.delete(
+      tableSections,
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
   // ---- Ana Sipariş (OrderModel) İşlemleri ----
   Future<OrderModel> insertMainOrder(OrderModel order) async {
     final db = await database;
@@ -342,8 +458,7 @@ class DatabaseHelper {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
     // OrderModel'de copyWith metodu tanımlı OLMALIDIR
-    // return order.copyWith(id: newId);
-    return order; // OrderModel'in ID'si set edilsin diye varsayıyoruz
+    return order.copyWith(id: newId); // FIXED: return order; -> return order.copyWith(id: newId);
   }
 
   Future<OrderModel?> getActiveOrderByTableId(String tableId) async {
@@ -519,6 +634,43 @@ class DatabaseHelper {
     });
   }
 
+  Future<List<DailyRevenue>> _enrichDailyRevenuesWithSoldProducts(
+      List<Map<String, dynamic>> maps, DateTime startDate, DateTime endDate) async {
+    final closedOrders = await getClosedOrdersByDateRange(startDate, endDate);
+    final Map<String, Map<String, int>> dailySoldProducts = {};
+
+    for (var order in closedOrders) {
+      final String? createdAt = order['createdAt'] as String?;
+      if (createdAt == null || createdAt.length < 10) continue;
+      final dateStr = createdAt.substring(0, 10);
+      final String itemsJson = order['itemsJson'] ?? '[]';
+      if (itemsJson.isNotEmpty) {
+        try {
+          final List<dynamic> itemsList = jsonDecode(itemsJson);
+          for (var itemMap in itemsList) {
+            final String name = (itemMap['productName'] ?? itemMap['name'] ?? '').toString().trim();
+            final int qty = (itemMap['quantity'] as num?)?.toInt() ?? 0;
+            if (name.isNotEmpty && qty > 0) {
+              dailySoldProducts.putIfAbsent(dateStr, () => {});
+              dailySoldProducts[dateStr]![name] = (dailySoldProducts[dateStr]![name] ?? 0) + qty;
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    return List.generate(maps.length, (i) {
+      final row = maps[i];
+      final date = row['date'] as String? ?? '';
+      return DailyRevenue(
+        id: row['id'] ?? '',
+        date: date,
+        revenue: (row['revenue'] as num?)?.toDouble() ?? 0.0,
+        soldProducts: dailySoldProducts[date] ?? {},
+      );
+    });
+  }
+
   Future<List<DailyRevenue>> getDailyRevenuesByRange(
       DateTime startDate, DateTime endDate) async {
     Database db = await instance.database;
@@ -533,7 +685,7 @@ class DatabaseHelper {
       orderBy: 'date ASC',
     );
 
-    return List.generate(maps.length, (i) => DailyRevenue.fromMap(maps[i]));
+    return _enrichDailyRevenuesWithSoldProducts(maps, startDate, endDate);
   }
 
   // YENİ METOT: AI Servisinin beklediği hata veren fonksiyonun tanımı
@@ -555,6 +707,58 @@ class DatabaseHelper {
     }
 
     return data;
+  }
+
+  Future<void> restoreDatabaseFromJson(Map<String, dynamic> data) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      // 1. Önce Foreign Key kısıtlamalarını kapat (Tablo silme/ekleme sırasında hata almamak için)
+      await txn.execute('PRAGMA foreign_keys = OFF');
+
+      try {
+        // 2. Mevcut tüm tabloları bul
+        final tables = await txn.rawQuery(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';");
+
+        // 3. Tüm tabloların içini boşalt
+        for (var table in tables) {
+          final tableName = table['name'] as String;
+          await txn.delete(tableName);
+        }
+
+        // 4. Yedekteki verileri ekle
+        for (var tableName in data.keys) {
+          final rows = data[tableName] as List;
+          for (var row in rows) {
+             // row bir Map<String, dynamic> olmalı, cast edelim
+             final rowMap = Map<String, dynamic>.from(row as Map);
+             await txn.insert(tableName, rowMap);
+          }
+        }
+      } finally {
+        // 5. Her durumda Foreign Key kısıtlamalarını tekrar aç
+        await txn.execute('PRAGMA foreign_keys = ON');
+      }
+    });
+  }
+
+  /// Tüm veritabanı tablolarını temizler.
+  Future<void> clearDatabase() async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.execute('PRAGMA foreign_keys = OFF');
+      try {
+        final tables = await txn.rawQuery(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';");
+        for (var table in tables) {
+          final tableName = table['name'] as String;
+          await txn.delete(tableName);
+        }
+      } finally {
+        await txn.execute('PRAGMA foreign_keys = ON');
+      }
+    });
+    debugPrint("SQLite veritabanı başarıyla temizlendi.");
   }
 
   Future<double> getTodayRevenue() async {
@@ -587,9 +791,7 @@ class DatabaseHelper {
       whereArgs: [formattedDate],
       orderBy: 'date ASC',
     );
-    return List.generate(maps.length, (i) {
-      return DailyRevenue.fromMap(maps[i]);
-    });
+    return _enrichDailyRevenuesWithSoldProducts(maps, thirtyDaysAgo, DateTime.now());
   }
 
   Future<Map<int, double>> getHourlyRevenueForToday() async {
@@ -633,59 +835,16 @@ class DatabaseHelper {
   }) async {
     final db = await database;
 
-    final activeOrderResult = await db.query(
-      tableMainOrders,
-      where: 'tableId = ?',
-      whereArgs: [tableId],
-      orderBy: 'createdAt DESC',
-      limit: 1,
-    );
-
-    List<Map<String, dynamic>> itemsForJson = [];
-    int durationSeconds = elapsedTime;
-
-    if (activeOrderResult.isNotEmpty) {
-      final orderId = activeOrderResult.first['id'] as int;
-
-      final itemsMaps = await db.query(
-        tableOrderItems,
-        where: 'orderId = ?',
-        whereArgs: [orderId],
-      );
-
-      for (var itemMap in itemsMaps) {
-        final double price = (itemMap['productPrice'] is num)
-            ? (itemMap['productPrice'] as num).toDouble()
-            : 0.0; // Varsayılan değer
-        final int qty =
-            (itemMap['quantity'] is int) ? itemMap['quantity'] as int : 0;
-        final int isSpecial = (itemMap['isSpecialProduct'] is int)
-            ? itemMap['isSpecialProduct'] as int
-            : 0;
-
-        itemsForJson.add({
-          'productId': itemMap['productId'],
-          'productName': itemMap['productName'],
-          'productPrice': price,
-          'quantity': qty,
-          'isSpecialProduct': isSpecial,
-        });
-      }
-    }
-
-    await db.transaction((txn) async {
-      await txn.insert(tableClosedOrders, {
-        'tableId': tableId,
-        'tableName': tableName,
-        'startTime': startTime.toIso8601String(),
-        'endTime': endTime.toIso8601String(),
-        'durationSeconds': durationSeconds,
-        'total': totalRevenue,
-        'itemsJson':
-            itemsJson, // <-- GÜNCELLENDİ: Parametreden gelen JSON kullanılıyor
-        'createdAt': DateTime.now().toIso8601String(),
-        'note': note,
-      });
+    await db.insert(tableClosedOrders, {
+      'tableId': tableId,
+      'tableName': tableName,
+      'startTime': startTime.toIso8601String(),
+      'endTime': endTime.toIso8601String(),
+      'durationSeconds': elapsedTime,
+      'total': totalRevenue,
+      'itemsJson': itemsJson,
+      'createdAt': DateTime.now().toIso8601String(),
+      'note': note,
     });
 
     await deleteOldClosedOrders();
@@ -722,11 +881,71 @@ class DatabaseHelper {
     return maps;
   }
 
+  Future<List<Map<String, dynamic>>> getClosedOrdersByDateRange(
+      DateTime startDate, DateTime endDate) async {
+    final db = await database;
+    final start = startDate.toIso8601String();
+    final end = endDate.toIso8601String();
+
+    final List<Map<String, dynamic>> maps = await db.query(
+      tableClosedOrders,
+      where: 'createdAt BETWEEN ? AND ?',
+      whereArgs: [start, end],
+      orderBy: 'createdAt DESC',
+    );
+    return maps;
+  }
+
+  /// 📊 Masa bazlı satış özetini çeker (Süre bilgileri dahil)
+  Future<List<Map<String, dynamic>>> getTableSalesSummary({
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    final db = await database;
+    final start = startDate.toIso8601String();
+    final end = endDate.toIso8601String();
+
+    // createdAt'e göre filtrele, tableId ve tableName'e göre grupla
+    return await db.rawQuery('''
+      SELECT 
+        tableId, 
+        tableName, 
+        SUM(total) as totalRevenue, 
+        COUNT(*) as orderCount,
+        SUM(durationSeconds) as totalDurationSeconds,
+        AVG(durationSeconds) as avgDurationSeconds
+      FROM $tableClosedOrders
+      WHERE createdAt BETWEEN ? AND ?
+      GROUP BY tableId, tableName
+      ORDER BY totalRevenue DESC
+    ''', [start, end]);
+  }
+
+  /// 📊 Belirli bir masanın detaylı kayıtlarını çeker
+  Future<List<Map<String, dynamic>>> getTableDetailedRecords({
+    required String tableId,
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    final db = await database;
+    final start = startDate.toIso8601String();
+    final end = endDate.toIso8601String();
+
+    return await db.query(
+      tableClosedOrders,
+      where: 'tableId = ? AND createdAt BETWEEN ? AND ?',
+      whereArgs: [tableId, start, end],
+      orderBy: 'createdAt DESC',
+    );
+  }
+
   Future<void> deleteOldClosedOrders() async {
     final db = await database;
-    DateTime sixMonthsAgo =
-        DateTime.now().subtract(const Duration(days: 30 * 6));
-    final cutoff = sixMonthsAgo.toIso8601String();
+    // Rapor filtrelerinde 300 gün kullanılabildiği için, cihazda kapanmış
+    // sipariş detaylarını minimum 13 ay (yaklaşık 400 gün) saklıyoruz.
+    DateTime cutoffDate =
+        DateTime.now().subtract(const Duration(days: 400));
+    final cutoff = cutoffDate.toIso8601String();
     await db.delete(
       tableClosedOrders,
       where: 'createdAt < ?',
@@ -750,8 +969,7 @@ class DatabaseHelper {
         await db.query(tableCategories);
     final List<CategoryModel> categories =
         List.generate(categoryMaps.length, (i) {
-      // CategoryModel'de fromMap() metodu olduğu varsayılıyor
-      return (CategoryModel as dynamic).fromMap(categoryMaps[i]);
+      return CategoryModel.fromJson(categoryMaps[i]);
     });
 
     return {
@@ -812,14 +1030,53 @@ class DatabaseHelper {
   // **** VERESİYE FONKSİYONLARI SONU ****
 
   Future<void> addNotification(String title, String message) async {
-    // ...
+    // Implement if needed
   }
 
-  Future getOrdersForDate(DateTime date) async {
-    // ...
+  Future<List<Map<String, dynamic>>> getOrdersForDate(DateTime date) async {
+    final db = await database;
+    final formattedDate = DateFormat('yyyy-MM-dd').format(date);
+    return await db.query(
+      tableClosedOrders,
+      where: "strftime('%Y-%m-%d', createdAt) = ?",
+      whereArgs: [formattedDate],
+    );
   }
 
   Future<void> deleteClosedOrder(String id) async {
-    // ...
+    final db = await database;
+    await db.delete(
+      tableClosedOrders,
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  // ---- İşlem Günlüğü (Log) Metotları ----
+
+  Future<int> insertLog({
+    required String userName,
+    required String actionType,
+    required String details,
+  }) async {
+    final db = await instance.database;
+    return await db.insert(tableAppLogs, {
+      'userName': userName,
+      'actionType': actionType,
+      'details': details,
+      'timestamp': DateTime.now().toIso8601String(),
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> getLogs({int days = 14}) async {
+    final db = await instance.database;
+    final cutoffDate = DateTime.now().subtract(Duration(days: days)).toIso8601String();
+    
+    return await db.query(
+      tableAppLogs,
+      where: 'timestamp >= ?',
+      whereArgs: [cutoffDate],
+      orderBy: 'timestamp DESC',
+    );
   }
 }

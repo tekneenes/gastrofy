@@ -10,7 +10,8 @@ class TableModel {
   OrderModel? currentOrder;
   List<OrderItem> orders; // sipariş detayları
   int position; // sıralama pozisyonu
-  String? note; // YENİ: Masa için not alanı
+  String? note; // Masa için not alanı
+  String? sectionId; // YENİ: Bölge (Sekme) ID'si
 
   TableModel({
     required this.id,
@@ -21,7 +22,8 @@ class TableModel {
     this.currentOrder,
     List<OrderItem>? orders,
     required this.position,
-    this.note, // YENİ: Kurucuya eklendi
+    this.note,
+    this.sectionId, // YENİ: Kurucuya eklendi
   }) : orders = orders ?? [];
 
   // Veritabanından okuma
@@ -48,7 +50,8 @@ class TableModel {
       currentOrder: null, // OrderModel genelde ayrı yüklenir
       orders: [],
       position: map['position'] ?? 0,
-      note: tableNote, // YENİ: Not buraya eklendi
+      note: tableNote,
+      sectionId: map['sectionId'], // YENİ: Bölge ID'si alınıyor
     );
   }
 
@@ -61,7 +64,8 @@ class TableModel {
       'startTime': startTime?.toIso8601String(),
       'totalRevenue': totalRevenue,
       'position': position,
-      'note': note, // YENİ: Not toMap'e eklendi
+      'note': note,
+      'sectionId': sectionId, // YENİ
     };
   }
 
@@ -86,7 +90,8 @@ class TableModel {
       currentOrder: currentOrder ?? this.currentOrder,
       orders: orders ?? this.orders,
       position: position ?? this.position,
-      note: note ?? this.note, // YENİ: Not güncellemesi
+      note: note ?? this.note,
+      sectionId: sectionId ?? this.sectionId, // YENİ
     );
   }
 }
