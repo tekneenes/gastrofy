@@ -66,18 +66,33 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
 
   // Dinamik Sayfa Listesi
   List<PageDefinition> _authorizedPages = [];
-  bool _isLoadingPages = true;
+  final Set<int> _visitedIndices = {0};
+  bool _isLoadingPages = false;
 
   @override
   void initState() {
     super.initState();
+    // İlk sayfa (Masalar) hemen hazır olsun, yükleme ekranı ve kasma yaşanmasın
+    _authorizedPages = [
+      PageDefinition(
+        title: 'Masalar',
+        icon: MdiIcons.tableChair,
+        widget: home_page.HomeScreen(loggedInUser: widget.loggedInUser),
+        tutorialKey: TutorialKeys.dockMasalar,
+        permissionKey: null,
+      ),
+    ];
     _loadDockPreference();
     _loadAutoLogoutSettings();
     _initPagesAndPermissions();
     
-    // Uygulama açıldığında son giriş zamanını güncelle (Auto-Delete için)
+    // Uygulama açıldığında son giriş zamanını güncelle (Auto-Delete için) - UI animasyonunu aksatmamak için hafif gecikmeli
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      FirebaseService.instance.updateLastLogin(widget.loggedInUser);
+      Future.delayed(const Duration(seconds: 1), () {
+        if (mounted) {
+          FirebaseService.instance.updateLastLogin(widget.loggedInUser);
+        }
+      });
     });
   }
 
@@ -725,7 +740,10 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
 
   void _onItemTapped(int index) {
     resetInactivityTimer();
-    setState(() => _selectedIndex = index);
+    setState(() {
+      _selectedIndex = index;
+      _visitedIndices.add(index);
+    });
     _showDockTemporarily();
   }
 
@@ -784,7 +802,7 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoadingPages) {
+    if (_isLoadingPages && _authorizedPages.isEmpty) {
       return const Scaffold(
         backgroundColor: Color(0xFFF5F7FA),
         body: Center(child: CircularProgressIndicator()),
@@ -804,11 +822,16 @@ class _MainScreenState extends State<MainScreen> with TickerProviderStateMixin {
           key: screenCaptureKey,
           child: Stack(
             children: [
-              // Ana İçerik
+              // Ana İçerik - Tembel (Lazy) Yükleme ile sadece ziyaret edilen sayfalar inşa edilir
               Positioned.fill(
                 child: IndexedStack(
                   index: _selectedIndex,
-                  children: _authorizedPages.map((p) => p.widget).toList(),
+                  children: List.generate(_authorizedPages.length, (index) {
+                    if (_visitedIndices.contains(index)) {
+                      return _authorizedPages[index].widget;
+                    }
+                    return const SizedBox.shrink();
+                  }),
                 ),
               ),
               // Dock
