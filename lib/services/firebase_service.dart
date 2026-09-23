@@ -150,79 +150,63 @@ class FirebaseService {
   }
 
   static const String defaultPrivacyText = """
-1. GİRİŞ
-Bu Gizlilik Politikası, işletmemizin kişisel verilerinizi nasıl topladığını, kullandığını ve koruduğunu açıklar.
+GİZLİLİK POLİTİKASI (PRIVACY POLICY)
+Son Güncelleme: 23 Eylül 2026
 
-2. VERİ TOPLAMA
-Hizmetlerimizi kullandığınızda aşağıdaki bilgileri toplayabiliriz:
-- İsim, E-posta, Telefon Numarası
-- Cihaz Bilgileri
-- Konum Bilgileri (izin verildiğinde)
+1. GİRİŞ VE VERİ SORUMLUSU
+Gastrofy ("Uygulama"), restoran ve kafe işletmelerinin masa, adisyon, sipariş ve raporlama süreçlerini optimize etmek amacıyla geliştirilmiş bir yönetim platformudur. Bu Gizlilik Politikası, 6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK"), Avrupa Birliği Genel Veri Koruma Tüzüğü ("GDPR") ve Apple App Store Gizlilik Yönergeleri uyarınca hazırlanmıştır.
 
-3. VERİ KULLANIMI
-Verileriniz şu amaçlarla kullanılır:
-- Hizmet sunumu
-- Müşteri supports
-- Güvenlik ve doğrulama
-- Yasal yükümlülükler
+2. TOPLANAN VERİLER VE TOPLAMA YÖNTEMLERİ
+Uygulamamız gizliliği temel alan "Local-First" (Önce Yerel Veri) yaklaşımını benimser:
+- Hesap ve İletişim Bilgileri: İşletme adı, yetkili ad-soyadı, e-posta adresi, telefon numarası.
+- İşletme & Operasyonel Veriler: Masa düzeni, menü ve ürün adları, fiyatlar, adisyon kayıtları ve personel çalışma logları.
+- Donanım ve Tanılama Bilgileri: Lisans doğrulaması ve yerel ağ eşitlemesi amacıyla cihaz modeli, işletim sistemi sürümü ve anonim çökme raporları.
+- Ödeme ve Finansal Bilgiler: Pro abonelik ve uygulama içi satın alımlar doğrudan Apple App Store (In-App Purchase) altyapısı üzerinden işlenir. Kredi kartı veya banka bilgileriniz Gastrofy tarafından ASLA görüntülenemez ve saklanamaz.
 
-4. VERİ GÜVENLİĞİ
-Verilerinizin güvenliği bizim için önemlidir. Endüstri standardı güvenlik önlemleri uyguluyoruz.
+3. KULLANILAN CİHAZ İZİNLERİ VE AMAÇLARI
+- Kamera & Fotoğraf Kitaplığı: Yalnızca menü kalemlerine görsel eklemek veya işletme logosu yüklemek amacıyla işletmeci inisiyatifiyle kullanılır.
+- Yerel Ağ (Local Network): Wi-Fi üzerinden mutfak ekranı, garson cihazları ve ana kasa arasında sıfır gecikmeli eşitleme sağlamak için kullanılır.
 
-5. ÇEREZLER
-Hizmet kalitesini artırmak için çerezler kullanabiliriz.
+4. ÜÇÜNCÜ TARAFLARLA PAYLAŞIM VE İZLEME (TRACKING)
+Gastrofy, kullanıcılarını üçüncü taraf web sitelerinde veya uygulamalarında ASLA izlemez (Zero Tracking). Verileriniz hiçbir reklam ağına veya veri simsarına satılmaz ve kiralanmaz.
 
-6. DEĞİŞİKLİKLER
-Bu politikayı zaman zaman güncelleyebiliriz. Güncellemeler uygulamada duyurulacaktır.
-
-.......................................................
-(Daha fazla metin aşağı kaydırmayı zorunlu kılmak için eklenmiştir)
-.......................................................
-Lütfen tüm metni okuduğunuzdan emin olun.
-.......................................................
-Veri sorumlusu olarak haklarınız saklıdır.
-.......................................................
-KVKK kapsamında başvuru haklarınız mevcuttur.
-.......................................................
-İletişim için: info@gastrofy.com
-.......................................................
-Son güncelleme: 2026
+5. VERİ SAKLAMA VE İMHA HAKKI
+Verileriniz güvenli yerel veritabanında (SQLite) ve yetkilendirilmiş şifreli bulut altyapısında saklanır. Apple App Store Guideline 5.1.1(v) ve KVKK m. 11 uyarınca, kullanıcılar diledikleri zaman Ayarlar menüsünden veya destek@gastrofy.app adresine yazarak tüm verilerinin sunuculardan kalıcı olarak silinmesini talep edebilir.
   """;
 
   static const String defaultTermsText = """
-1. KABUL VE TARAFLAR
-Bu Kullanım Koşulları ("Sözleşme"), Gastrofy uygulamasına ("Uygulama") erişiminiz ve kullanımınızla ilgili kuralları belirler. Uygulamayı indirerek, kurarak veya kullanarak bu şartları kabul etmiş sayılırsınız. Eğer bu şartları kabul etmiyorsanız, lütfen uygulamayı kullanmayınız.
+KULLANIM KOŞULLARI, SON KULLANICI LİSANS SÖZLEŞMESİ (EULA) VE SORUMLULUK REDDİ
+Son Güncelleme: 23 Eylül 2026
 
-2. HİZMETİN KAPSAMI
-Uygulama, restoran ve kafe işletmeleri için masa takibi, sipariş yönetimi ve personel idaresi hizmetleri sunar. Şirketimiz, hizmetin içeriğini, özelliklerini veya kullanılabilirliğini önceden bildirmeksizin değiştirme veya sonlandırma hakkını saklı tutar.
+1. TARAFLAR VE KABUL
+Bu Kullanım Koşulları ve Son Kullanıcı Lisans Sözleşmesi ("Sözleşme"), Gastrofy uygulamasını ("Uygulama") indiren, kuran veya kullanan gerçek ya da tüzel kişi ("Kullanıcı" veya "İşletme") ile Gastrofy geliştiricisi ("Geliştirici") arasında akdedilmiştir. Uygulamayı kullanarak bu koşulları gayrikabili rücu kabul etmiş sayılırsınız.
 
-3. HESAP GÜVENLİĞİ VE SORUMLULUK
-- Kullanıcı, hesabının güvenliğini sağlamakla yükümlüdür.
-- Şifrenizi kimseyle paylaşmamalısınız.
-- Hesabınız üzerinden yapılan tüm işlemlerden siz sorumlusunuz.
-- Şüpheli bir durum fark ederseniz derhal bize bildirmelisiniz.
+2. HİZMETİN NİTELİĞİ VE LİSANS
+Gastrofy; masa takibi, sipariş organizasyonu, yerel ağ senkronizasyonu ve gelir raporlaması sağlayan ticari bir yardımcı yazılımdır. Kullanıcıya münhasır olmayan, devredilemez ve sınırlı bir kullanım lisansı verilmektedir.
 
-4. KULLANIM KURALLARI
-Aşağıdaki eylemler kesinlikle yasaktır:
-- Uygulamayı yasa dışı amaçlarla kullanmak.
-- Sistemin güvenliğini tehdit edecek girişimlerde bulunmak.
-- Tersine mühendislik yapmak veya kaynak kodunu kopyalamak.
-- Diğer kullanıcıların haklarını ihlal etmek veya taciz etmek.
-- Uygulama üzerinden spam veya zararlı yazılım yaymak.
+3. YASAL VE MALİ SORUMLULUK REDDİ (ÖKC / VERGİ MEVZUATI)
+- Gastrofy bir Ödeme Kaydedici Cihaz (ÖKC), mali yazarkasa donanımı veya Gelir İdaresi Başkanlığı (GİB) onaylı resmi mali mühür entegratörü DEĞİLDİR.
+- Uygulama tarafından üretilen adisyon fişleri, masa dökümleri ve gün sonu Z raporu simülasyonları yalnızca işletme içi operasyonel ve analitik takip amaçlıdır; Vergi Usul Kanunu kapsamında yasal mali fiş veya resmi fatura yerine geçmez.
+- Yasal mali belgelerin düzenlenmesi, vergi tahakkukları ve mali mevzuat yükümlülükleri tamamen İşletme sahibinin şahsi sorumluluğundadır. Geliştirici, vergi cezaları veya mali denetim ihtilaflarından dolayı hiçbir koşulda sorumlu tutulamaz.
 
-5. FİKRİ MÜLKİYET
-Uygulamanın tüm tasarımı, logosu, yazılımı, veritabanı ve içeriği şirketimize aittir. Bu materyallerin izinsiz kopyalanması, dağıtılması veya ticari amaçla kullanılması yasaktır.
+4. YAPAY ZEKA VE TAHMİN MEKANİZMASI (TABLE INTELLIGENCE) SORUMLULUK REDDİ
+- Gastrofy bünyesindeki yapay zeka analizleri ve önerileri (masa devir süresi, ürün karlılığı, yoğunluk tahminleri) yalnızca bilgilendirme ve tavsiye niteliğindedir.
+- Yapay zeka çıktıları geleceğe yönelik kesin ciro, karlılık veya müşteri artışı garantisi içermez. Bu çıktılara dayanılarak alınan ticari kararların sonuçlarından münhasıran İşletme sorumludur.
 
-6. ÜÇÜNCÜ TARAF HİZMETLERİ
-Uygulama, üçüncü taraf web sitelerine veya hizmetlerine bağlantılar içerebilir. Bu hizmetlerin içeriğinden veya gizlilik politikalarından sorumlu değiliz. Üçüncü taraf hizmetlerini kullanırken ilgili tarafın koşullarını incelemeniz önerilir.
+5. DONANIM, YEREL AĞ VE VERİ KAYBI SORUMLULUK REDDİ
+Uygulama "OLDUĞU GİBİ" (AS IS) sunulmaktadır. Yerel Wi-Fi ağı kopmaları, elektrik kesintileri, donanım arızaları veya işletim sistemi güncellemelerinden kaynaklanabilecek veri kayıplarından Geliştirici sorumlu tutulamaz. Düzenli veri yedeklemesi almak İşletmenin sorumluluğundadır.
 
-7. ÜCRETLENDİRME VE ÖDEMELER
-- Uygulama içi satın alımlar veya abonelikler söz konusu olduğunda, belirtilen ücretler geçerlidir.
-- Ücretlerde değişiklik yapma hakkımız saklıdır.
-- İptal ve iade koşulları ilgili platformun (App Store/Google Play) politikalarına tabidir.
+6. APPLE APP STORE ABONELİKLERİ VE ÖDEME KOŞULLARI
+- Gastrofy Pro özellikleri aylık (₺299 / Ay) veya yıllık (₺2.990 / Yıl) otomatik yenilenen abonelik modelleriyle sunulur.
+- Ödemeler satın alma onayı ile birlikte kullanıcının Apple Kimliği (Apple ID) hesabına yansıtılır.
+- Abonelik, cari dönemin bitiminden en az 24 saat önce iptal edilmediği sürece otomatik olarak yenilenir.
+- Kullanıcı, aboneliklerini dilediği an iOS / iPadOS / macOS Ayarlar > Apple Kimliği > Abonelikler menüsü üzerinden yönetebilir veya iptal edebilir.
 
-8. SORUMLULUK REDDİ (DISCLAIMER)
-Hizmet "olduğu gibi" sunulmaktadır. Şirketimiz, hizmetin kesintisiz, hatasız veya virüssüz olacağını garanti etmez. Veri kaybı, gelir kaybı veya diğer dolaylı zararlardan sorumlu tutulamaz.
+7. FİKRİ MÜLKİYET VE YASAKLI EYLEMLER
+Uygulamanın kaynak kodları, görsel tasarımları, veritabanı mimarisi ve ticari markaları Geliştiriciye aittir. Tersine mühendislik (reverse engineering) yapılması, kodların kopyalanması veya uygulamanın yetkisiz üçüncü kişilere kiralanması kesinlikle yasaktır.
+
+8. UYGULANACAK HUKUK VE YETKİLİ MAHKEME
+Bu sözleşmeden doğabilecek her türlü uyuşmazlıkta Türk Hukuku uygulanır ve İstanbul (Çağlayan) Mahkemeleri ile İcra Daireleri münhasır yetkilidir.
   """;
 
   /// Şirketi Firebase Firestore'a kaydeder veya günceller.
