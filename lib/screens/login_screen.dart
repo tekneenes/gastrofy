@@ -920,7 +920,7 @@ class _LoginScreenState extends State<LoginScreen>
                   Icon(Icons.bolt_rounded, size: 14, color: Colors.teal.shade700),
                   const SizedBox(width: 4),
                   Text(
-                    'Hızlı Giriş Aktif • Şifresiz',
+                    'Hızlı Giriş Aktif',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
