@@ -158,32 +158,6 @@ class _SplashScreenState extends State<SplashScreen>
                           ],
                         ),
                       ),
-                      const SizedBox(height: 10),
-
-                      // Slogan
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.15),
-                            width: 1,
-                          ),
-                        ),
-                        child: const Text(
-                          'Akıllı Restoran ve Masa Yönetimi',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w400,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                      ),
                     ],
                   ),
                 ),
