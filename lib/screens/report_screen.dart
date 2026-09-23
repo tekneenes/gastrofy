@@ -24,6 +24,7 @@ import 'DetailedTableScreen.dart';
 import 'TableDetailReportScreen.dart';
 import '../services/table_ai_service.dart';
 import '../services/database_helper.dart'; // EKLENDİ
+import '../services/database_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert'; // EKLENDİ
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -67,6 +68,8 @@ class _ReportScreenState extends State<ReportScreen> with TickerProviderStateMix
   String _aiAdvice = '';
   bool _aiAdviceIsFromCache = false;
   bool _isAiLoading = false;
+  bool _isAiPlanRequired = false;
+  String _currentPlan = 'Aylık Plan';
   late AnimationController _lottieController;
   int _visibleInsightCount = 0;
   Timer? _insightAnimTimer;
@@ -231,10 +234,41 @@ class _ReportScreenState extends State<ReportScreen> with TickerProviderStateMix
     final String cacheKey = "ai_report_${_startDate.millisecondsSinceEpoch}_${_endDate.millisecondsSinceEpoch}";
     final prefs = await SharedPreferences.getInstance();
 
+    // 1. Plan kontrolü: Yıllık Plan ve Deneme Sürümü açık, Aylık Planda kilitli
+    try {
+      final licenseInfo = await DatabaseService().getLicenseRemainingInfo();
+      final String plan = licenseInfo['planName'] ?? 'Aylık Plan';
+      _currentPlan = plan;
+      final bool isAnnualOrTrial = plan.contains('Yıllık') || plan.contains('Deneme') || plan.contains('Trial');
+      if (!isAnnualOrTrial) {
+        if (mounted) {
+          setState(() {
+            _isAiLoading = false;
+            _isAiPlanRequired = true;
+            _aiAdvice = 'PLAN_REQUIRED';
+          });
+        }
+        return;
+      }
+    } catch (e) {
+      debugPrint("Plan check error in reports: $e");
+    }
+
     if (!forceRefresh) {
       final cachedAdvice = prefs.getString(cacheKey);
       if (cachedAdvice != null && cachedAdvice.isNotEmpty) {
+        if (cachedAdvice == 'PLAN_REQUIRED' ||
+            cachedAdvice.contains('Analiz şu an yapılamıyor') ||
+            cachedAdvice.contains('Sistem servisi')) {
+          setState(() {
+            _isAiPlanRequired = true;
+            _aiAdvice = 'PLAN_REQUIRED';
+            _isAiLoading = false;
+          });
+          return;
+        }
         setState(() {
+          _isAiPlanRequired = false;
           _aiAdvice = cachedAdvice;
           _aiAdviceIsFromCache = true;
           _isAiLoading = false;
@@ -264,6 +298,7 @@ class _ReportScreenState extends State<ReportScreen> with TickerProviderStateMix
     setState(() {
       _isAiLoading = true;
       _aiAdvice = '';
+      _isAiPlanRequired = false;
       _aiAdviceIsFromCache = false;
     });
 
@@ -286,9 +321,25 @@ Masa Performansları: $tablePerformance
 
       final advice = await _aiService.getReportAnalysis(reportContext);
 
+      if (advice == "PLAN_REQUIRED" ||
+          advice.contains("PLAN_REQUIRED") ||
+          advice.contains("Analiz şu an yapılamıyor") ||
+          advice.contains("Sistem servisi")) {
+        if (mounted) {
+          setState(() {
+            _isAiLoading = false;
+            _isAiPlanRequired = true;
+            _aiAdvice = "PLAN_REQUIRED";
+          });
+          await prefs.setString(cacheKey, "PLAN_REQUIRED");
+        }
+        return;
+      }
+
       if (mounted) {
         setState(() {
           _aiAdvice = advice;
+          _isAiPlanRequired = false;
           _isAiLoading = false;
           _visibleInsightCount = 0;
         });
@@ -307,7 +358,8 @@ Masa Performansları: $tablePerformance
       if (mounted) {
         setState(() {
           _isAiLoading = false;
-          _aiAdvice = "Şu an analiz yapılamıyor.";
+          _isAiPlanRequired = true;
+          _aiAdvice = "PLAN_REQUIRED";
         });
       }
     }
@@ -1033,13 +1085,22 @@ Masa Performansları: $tablePerformance
 
   Widget _buildSimpleAIAdvice(double totalRevenue) {
     String adviceText = _aiAdvice;
+    final bool isPlanRequired = _isAiPlanRequired || adviceText == 'PLAN_REQUIRED';
 
     Widget headerCard = InkWell(
-      onTap: _isAiLoading ? null : () => _fetchAIAdvice(forceRefresh: true),
+      onTap: _isAiLoading
+          ? null
+          : () {
+              if (isPlanRequired) {
+                _navigateToPlansScreen();
+              } else {
+                _fetchAIAdvice(forceRefresh: true);
+              }
+            },
       borderRadius: BorderRadius.circular(24),
       child: Container(
         padding: const EdgeInsets.all(20),
-        margin: EdgeInsets.only(bottom: adviceText.isNotEmpty && !_isAiLoading ? 12 : 24),
+        margin: EdgeInsets.only(bottom: (adviceText.isNotEmpty || isPlanRequired) && !_isAiLoading ? 12 : 24),
         decoration: BoxDecoration(
           color: const Color(0xFF0F172A),
           borderRadius: BorderRadius.circular(24),
@@ -1097,7 +1158,9 @@ Masa Performansları: $tablePerformance
                   Text(
                     _isAiLoading 
                         ? 'Analiz ediliyor...' 
-                        : (adviceText.isEmpty ? 'Yapay Zeka ile Analiz Et' : 'Yapay Zeka Raporu'),
+                        : (isPlanRequired
+                            ? 'Yapay Zeka Raporu'
+                            : (adviceText.isEmpty ? 'Yapay Zeka ile Analiz Et' : 'Yapay Zeka Raporu')),
                     style: GoogleFonts.outfit(
                       color: Colors.white,
                       fontSize: 18,
@@ -1117,18 +1180,44 @@ Masa Performansları: $tablePerformance
             ),
             if (!_isAiLoading)
               IconButton(
-                onPressed: () => _fetchAIAdvice(forceRefresh: true),
+                onPressed: () {
+                  if (isPlanRequired) {
+                    _navigateToPlansScreen();
+                  } else {
+                    _fetchAIAdvice(forceRefresh: true);
+                  }
+                },
                 icon: Icon(
-                  adviceText.isEmpty ? Icons.arrow_forward_ios_rounded : Icons.refresh_rounded, 
-                  color: Colors.white70,
-                  size: adviceText.isEmpty ? 18 : 24,
+                  isPlanRequired
+                      ? Icons.workspace_premium_rounded
+                      : (adviceText.isEmpty ? Icons.arrow_forward_ios_rounded : Icons.refresh_rounded), 
+                  color: isPlanRequired ? Colors.amber : Colors.white70,
+                  size: isPlanRequired ? 26 : (adviceText.isEmpty ? 18 : 24),
                 ),
-                tooltip: adviceText.isEmpty ? 'Analiz Et' : 'Yenile',
+                tooltip: isPlanRequired ? 'Planınızı Yükseltin' : (adviceText.isEmpty ? 'Analiz Et' : 'Yenile'),
               ),
           ],
         ),
       ),
     );
+
+    if (isPlanRequired) {
+      return AnimatedBuilder(
+        animation: _glowController,
+        builder: (context, child) {
+          return CustomPaint(
+            painter: AppleIntelligenceGlowPainter(animationValue: _glowController.value),
+            child: child,
+          );
+        },
+        child: Column(
+          children: [
+            headerCard,
+            _buildPlanUpgradeCard(),
+          ],
+        ),
+      );
+    }
 
     if (_isAiLoading || adviceText.isEmpty) {
       return AnimatedBuilder(
@@ -1252,6 +1341,135 @@ Masa Performansları: $tablePerformance
         const SizedBox(height: 12),
       ],
     ),);
+  }
+
+  Future<void> _navigateToPlansScreen() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SubscriptionPlansScreen(
+          email: 'demo_user@gastrofy.com',
+          currentPlan: _currentPlan,
+        ),
+      ),
+    );
+    if (result == true) {
+      _fetchAIAdvice(forceRefresh: true);
+    }
+  }
+
+  Widget _buildPlanUpgradeCard() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: const Color(0xFF0284C7).withOpacity(0.25),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0284C7).withOpacity(0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0284C7).withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.workspace_premium_rounded,
+                  color: Color(0xFF0284C7),
+                  size: 26,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0284C7).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Text(
+                        'YILLIK PLANA ÖZEL',
+                        style: TextStyle(
+                          color: Color(0xFF0284C7),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Yapay Zeka Raporları İçin Planınızı Yükseltin',
+                      style: GoogleFonts.outfit(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF1E293B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'İşletmenizin ciro tahminleri, en verimli masa stratejileri ve yapay zeka menü optimizasyonu Yıllık Plan üyelerine özeldir. Bu analitiğe erişmek için lütfen planınızı yükseltin.',
+            style: GoogleFonts.outfit(
+              fontSize: 14,
+              color: Colors.blueGrey.shade600,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 18),
+          ElevatedButton(
+            onPressed: _navigateToPlansScreen,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1E293B),
+              foregroundColor: Colors.white,
+              minimumSize: const Size(double.infinity, 48),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              elevation: 2,
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.star_rounded, color: Colors.amber, size: 20),
+                SizedBox(width: 8),
+                Text(
+                  'Planınızı Yükseltin',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
+                SizedBox(width: 6),
+                Icon(Icons.arrow_forward_rounded, size: 16),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildSectionHeader(String title, VoidCallback onSeeAll) {

@@ -323,7 +323,7 @@ SORU: $userQuery""";
 
   Future<String> getReportAnalysis(String reportData) async {
     if (_apiKey.isEmpty) {
-      return "❌ Sistem servisi şu an kullanılamıyor.";
+      return "PLAN_REQUIRED";
     }
 
     const String apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
@@ -391,6 +391,9 @@ $reportData""";
         } else {
           debugPrint("Report Analysis Error: No choices found. Response: ${response.body}");
         }
+      } else if (response.statusCode == 401) {
+        debugPrint("Report Analysis Error: ${response.statusCode} - ${response.body}");
+        return "PLAN_REQUIRED";
       } else if (response.statusCode == 429) {
         return "İstek yoğunluğu nedeniyle analiz şu an yapılamıyor. Lütfen biraz sonra tekrar deneyin.";
       } else {
