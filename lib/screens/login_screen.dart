@@ -256,7 +256,7 @@ class _LoginScreenState extends State<LoginScreen>
         setState(() {
           _isLoginSuccess = true;
         });
-        await Future.delayed(const Duration(milliseconds: 350));
+        await Future.delayed(const Duration(milliseconds: 850));
 
         _navigateToMainScreen();
       }
@@ -384,7 +384,8 @@ class _LoginScreenState extends State<LoginScreen>
       });
     }
 
-    await Future.delayed(const Duration(milliseconds: 250));
+    // Hoş geldin mesajının rahatça okunabilmesi için ideal süre
+    await Future.delayed(const Duration(milliseconds: 850));
 
     _navigateToMainScreen();
   }
@@ -1391,9 +1392,9 @@ class _LoginScreenState extends State<LoginScreen>
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           AnimatedSwitcher(
-            duration: const Duration(milliseconds: 400),
+            duration: const Duration(milliseconds: 350),
             transitionBuilder: (child, animation) =>
-                ScaleTransition(scale: animation, child: child),
+                ScaleTransition(scale: CurvedAnimation(parent: animation, curve: Curves.easeOutBack), child: child),
             child: _isLoginSuccess
                 ? const Icon(
                     key: ValueKey('success-icon'),
@@ -1408,9 +1409,9 @@ class _LoginScreenState extends State<LoginScreen>
           ),
           const SizedBox(height: 24),
           AnimatedSwitcher(
-            duration: const Duration(milliseconds: 400),
+            duration: const Duration(milliseconds: 350),
             transitionBuilder: (child, animation) =>
-                FadeTransition(opacity: animation, child: child),
+                FadeTransition(opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut), child: child),
             child: _isLoginSuccess
                 ? Text(
                     key: ValueKey('welcome-text-$userName'),
