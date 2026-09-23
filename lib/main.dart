@@ -9,6 +9,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 // Uygulamanızın diğer import'ları
 import 'screens/splash_screen.dart';
@@ -26,6 +27,23 @@ import 'firebase_options.dart';
 void main() async {
   // 1. Flutter motorunu hazırla
   WidgetsFlutterBinding.ensureInitialized();
+
+  // iPad ve Tabletlerde yatay (landscape), telefonlarda dikey (portrait) başlat
+  try {
+    final views = WidgetsBinding.instance.platformDispatcher.views;
+    if (views.isNotEmpty) {
+      final view = views.first;
+      if (view.devicePixelRatio > 0 && view.physicalSize.shortestSide > 0) {
+        final size = view.physicalSize / view.devicePixelRatio;
+        if (size.shortestSide >= 600) {
+          await SystemChrome.setPreferredOrientations([
+            DeviceOrientation.landscapeLeft,
+            DeviceOrientation.landscapeRight,
+          ]);
+        }
+      }
+    }
+  } catch (_) {}
 
   // macOS / Masaüstü klavye tekrarlarında oluşan Flutter framework assertion hatasını filtrele
   FlutterError.onError = (FlutterErrorDetails details) {
@@ -112,8 +130,16 @@ class MyApp extends StatelessWidget {
         final prefs = await SharedPreferences.getInstance();
         prefs.setBool('seen_main_tutorial', true);
       },
-      blurValue: 1,
-      builder: (context) => MaterialApp(
+      builder: (context) {
+        final isTablet = MediaQuery.sizeOf(context).shortestSide >= 600;
+        if (isTablet) {
+          SystemChrome.setPreferredOrientations([
+            DeviceOrientation.landscapeLeft,
+            DeviceOrientation.landscapeRight,
+          ]);
+        }
+
+        return MaterialApp(
         title: 'Gastrofy',
         debugShowCheckedModeBanner: false,
         localizationsDelegates: const [
@@ -148,7 +174,8 @@ class MyApp extends StatelessWidget {
           ),
         ),
         home: const SplashScreen(),
-      ),
-    );
-  }
+      );
+    },
+  );
+}
 }
