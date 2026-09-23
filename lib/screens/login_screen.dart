@@ -256,13 +256,9 @@ class _LoginScreenState extends State<LoginScreen>
         setState(() {
           _isLoginSuccess = true;
         });
-        await Future.delayed(const Duration(milliseconds: 2000));
+        await Future.delayed(const Duration(milliseconds: 350));
 
-        if (_selectedUser != null) {
-          Navigator.of(context).pushReplacement(MaterialPageRoute(
-              builder: (context) =>
-                  MainScreen(loggedInUser: _selectedUser!)));
-        }
+        _navigateToMainScreen();
       }
     } else if (mounted) {
       _quickLoginPinController.clear();
@@ -338,9 +334,7 @@ class _LoginScreenState extends State<LoginScreen>
             final bool isLicenseValid = await _checkLicense(_selectedUser!);
             if (!isLicenseValid) return;
 
-            Navigator.of(context).pushReplacement(MaterialPageRoute(
-                builder: (context) =>
-                    MainScreen(loggedInUser: _selectedUser!)));
+            _navigateToMainScreen();
           }
         } else {
             _showError('Şifre hatalı!');
@@ -351,13 +345,27 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
+  void _navigateToMainScreen() {
+    if (!mounted || _selectedUser == null) return;
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            MainScreen(loggedInUser: _selectedUser!),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+        transitionDuration: const Duration(milliseconds: 200),
+      ),
+    );
+  }
+
   Future<void> _handlePasswordlessLogin(Map<String, dynamic> user) async {
     setState(() {
       _selectedUser = user;
       _isVerifyingPin = true;
     });
 
-    await Future.delayed(const Duration(milliseconds: 250));
+    await Future.delayed(const Duration(milliseconds: 100));
     
     // Lisans Kontrolü (Atlanmamalı!)
     final bool isLicenseValid = await _checkLicense(user);
@@ -376,13 +384,9 @@ class _LoginScreenState extends State<LoginScreen>
       });
     }
 
-    await Future.delayed(const Duration(milliseconds: 700));
+    await Future.delayed(const Duration(milliseconds: 250));
 
-    if (mounted && _selectedUser != null) {
-      Navigator.of(context).pushReplacement(MaterialPageRoute(
-          builder: (context) =>
-              MainScreen(loggedInUser: _selectedUser!)));
-    }
+    _navigateToMainScreen();
   }
 
   Future<void> _handlePasswordResetEmailRequest() async {
