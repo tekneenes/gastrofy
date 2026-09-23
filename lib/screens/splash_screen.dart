@@ -112,12 +112,11 @@ class _SplashScreenState extends State<SplashScreen>
                         width: 120,
                         height: 120,
                         decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(28),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.2),
-                              blurRadius: 30,
+                              color: Colors.black.withOpacity(0.35),
+                              blurRadius: 25,
                               offset: const Offset(0, 10),
                             ),
                           ],
@@ -126,18 +125,16 @@ class _SplashScreenState extends State<SplashScreen>
                             width: 2,
                           ),
                         ),
-                        child: ClipOval(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Image.asset(
-                              'assets/gastrofy.png',
-                              fit: BoxFit.contain,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  const Icon(
-                                Icons.restaurant_rounded,
-                                size: 54,
-                                color: Colors.white,
-                              ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(26),
+                          child: Image.asset(
+                            'assets/gastrofy.png',
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                const Icon(
+                              Icons.restaurant_rounded,
+                              size: 54,
+                              color: Colors.white,
                             ),
                           ),
                         ),
@@ -178,7 +175,7 @@ class _SplashScreenState extends State<SplashScreen>
                           ),
                         ),
                         child: const Text(
-                          'Akıllı Masa & Restoran Yönetimi',
+                          'Akıllı Restoran ve Masa Yönetimi',
                           style: TextStyle(
                             color: Colors.white70,
                             fontSize: 14,
