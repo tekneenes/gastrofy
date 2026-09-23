@@ -2,170 +2,128 @@
 <html lang="tr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
   <title>Gizlilik Politikası - Gastrofy</title>
-  <meta name="description" content="Gastrofy Restoran ve Masa Yönetim Sistemi resmi Gizlilik Politikası. KVKK ve App Store gereksinimlerine uygundur.">
+  <meta name="description" content="Gastrofy Restoran ve Masa Yönetim Sistemi resmi Gizlilik Politikası. KVKK ve Apple App Store gereksinimlerine uygundur.">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" type="image/png" href="gastrofy.png">
 </head>
 <body>
 
-  <!-- NAVBAR -->
-  <header class="navbar">
-    <div class="container nav-wrapper">
-      <a href="index.html" class="logo-area">
-        <img src="gastrofy.png" alt="Gastrofy Logo">
-        <span>Gastrofy</span>
-      </a>
-      <ul class="nav-links">
-        <li><a href="index.html">Ana Sayfa</a></li>
-        <li><a href="terms.html">Kullanım Koşulları</a></li>
-        <li><a href="privacy.html" class="active">Gizlilik Politikası</a></li>
-        <li><a href="support.html">Destek</a></li>
-      </ul>
-      <a href="support.html" class="btn-cta">İletişime Geç</a>
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="container nav-container">
+      <div class="nav-top-row">
+        <a href="index.html" class="nav-brand">
+          <img src="gastrofy.png" alt="Gastrofy" class="brand-logo">
+          <span class="brand-text">Gastrofy</span>
+        </a>
+        <a href="support.html" class="nav-btn">Destek</a>
+      </div>
+      <div class="nav-links">
+        <a href="index.html">Ana Sayfa</a>
+        <a href="privacy.html" class="active">Gizlilik Politikası</a>
+        <a href="terms.html">Kullanım Koşulları</a>
+        <a href="support.html">Yardım</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Header -->
+  <header class="page-header">
+    <div class="container">
+      <div class="badge">🔒 Yasal Doküman</div>
+      <h1>Gizlilik Politikası (Privacy Policy)</h1>
+      <p class="subtitle">Son Güncelleme: 23 Eylül 2026 • Yürürlük Sürümü: 3.0.1</p>
     </div>
   </header>
 
-  <!-- MAIN -->
-  <main>
-    <div class="container">
-      <div class="legal-header">
-        <span class="badge">Yasal Doküman</span>
-        <h1>Gizlilik Politikası (Privacy Policy)</h1>
-        <div class="meta">Son Güncelleme: 23 Eylül 2026 • Yürürlük Tarihi: 23 Eylül 2026 • Sürüm: 3.0.1</div>
-      </div>
+  <!-- Main Content -->
+  <main class="container">
+    <div class="legal-content">
 
-      <div class="legal-content">
+      <section>
+        <h2>1. Giriş ve Veri Sorumlusu</h2>
+        <p>
+          Gastrofy ("Geliştirici", "Uygulama", "biz" veya "bizim"), restoran ve kafe işletmelerine masa takibi, sipariş, adisyon ve gelir analitiği sunan yeni nesil bir mobil/tablet yönetim platformudur.
+        </p>
+        <p>
+          Bu Gizlilik Politikası, Gastrofy uygulamasını indirdiğinizde, kurduğunuzda veya kullandığınızda kişisel ve operasyonel verilerinizin <strong>6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK")</strong>, <strong>Genel Veri Koruma Tüzüğü ("GDPR")</strong> ve <strong>Apple App Store İnceleme Kılavuzu</strong> ilkeleri uyarınca nasıl toplandığını, işlendiğini, saklandığını ve korunduğunu açıklamaktadır.
+        </p>
+        <p>
+          <strong>Veri Sorumlusu İletişim:</strong><br>
+          E-posta: <a href="mailto:destek@gastrofy.app">destek@gastrofy.app</a>
+        </p>
+      </section>
 
-        <section>
-          <h2>1. Giriş ve Veri Sorumlusu</h2>
-          <p>
-            Gastrofy ("Geliştirici", "Uygulama", "biz" veya "bizim"), gastronomi ve restoran işletmelerine masa, sipariş, adisyon ve gelir analitiği sunan yeni nesil bir mobil/tablet yönetim platformudur.
-          </p>
-          <p>
-            Bu Gizlilik Politikası, Gastrofy uygulamasını ("Uygulama") indirdiğinizde, kurduğunuzda veya kullandığınızda kişisel ve operasyonel verilerinizin 6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK"), Genel Veri Koruma Tüzüğü ("GDPR") ve Apple App Store İnceleme Kılavuzu ilkeleri uyarınca nasıl toplandığını, işlendiğini, saklandığını ve korunduğunu açıklamaktadır.
-          </p>
-          <p>
-            <strong>Veri Sorumlusu İletişim:</strong><br>
-            E-posta: <a href="mailto:destek@gastrofy.app">destek@gastrofy.app</a> / <a href="mailto:info@gastrofy.app">info@gastrofy.app</a>
-          </p>
-        </section>
+      <section>
+        <h2>2. Temel Gizlilik Prensibimiz: Yerel Öncelikli Mimari (Offline-First)</h2>
+        <p>
+          Gastrofy, işletmenizin gizliliğine azami saygı duyar. Uygulama temel mimari olarak <strong>"Local-First" (Öncelikli Yerel Depolama)</strong> prensibiyle geliştirilmiştir:
+        </p>
+        <ul>
+          <li><strong>Masa ve Sipariş Verileriniz:</strong> Masalar, siparişler, ürün fiyatları ve adisyonlar öncelikle cihazınızın güvenli yerel veritabanında (SQLite) tutulur.</li>
+          <li><strong>Yerel Ağ (LAN) Senkronizasyonu:</strong> Mutfak ekranı, garson cihazları ve ana kasa arasındaki anlık veri alışverişi doğrudan işletmenizin yerel Wi-Fi ağı üzerinden şifreli soketlerle gerçekleşir. Verileriniz harici sunuculardan geçmeden doğrudan cihazlar arası senkronize edilir.</li>
+        </ul>
+      </section>
 
-        <section>
-          <h2>2. Temel Gizlilik Prensibimiz: Yerel Öncelikli Mimari (Offline-First)</h2>
-          <p>
-            Gastrofy, işletmenizin gizliliğine azami saygı duyar. Uygulama temel mimari olarak <strong>"Local-First" (Öncelikli Yerel Depolama)</strong> prensibiyle geliştirilmiştir:
-          </p>
-          <ul>
-            <li>Masalarınız, adisyonlarınız, sipariş kayıtlarınız, müşteri veresiye hesaplarınız ve ürün menünüz öncelikli olarak <strong>kendi tablet veya cihazınızın yerel SQLite veritabanında</strong> şifreli şekilde saklanır.</li>
-            <li>Gastrofy, işletmenizin ticari sırlarını, müşteri sipariş detaylarını veya gelir verilerini asla üçüncü taraf reklam şirketlerine, veri simsarlarına veya analiz pazarlamacılarına aktarmaz veya satmaz.</li>
-          </ul>
-        </section>
+      <section>
+        <h2>3. Toplanan Bilgiler ve Toplanma Amaçları</h2>
+        <p>Gastrofy yalnızca uygulamanın düzgün çalışabilmesi ve hizmet kalitesinin sürdürülebilmesi için zorunlu olan asgari düzeyde veriyi işler:</p>
+        <ul>
+          <li><strong>Hesap ve İletişim Bilgileri:</strong> İşletme adı, yetkili ad-soyadı, e-posta adresi, telefon numarası ve şifre (güvenli hash yöntemiyle). Bu bilgiler şirket hesabı oluşturma, giriş doğrulama ve lisans takibi için kullanılır.</li>
+          <li><strong>Operasyonel Veriler:</strong> Menü kalemleri, masa düzeni, garson adları ve satış özetleri. Bu veriler yalnızca restoran içi iş akışınızı yönetmek için kullanılır.</li>
+          <li><strong>Cihaz Tanılama Bilgileri:</strong> Cihaz modeli, işletim sistemi sürümü ve anonim çökme raporları. Bu veriler uygulamanın kararlılığını sağlamak ve hataları gidermek amacıyla işlenir.</li>
+        </ul>
+      </section>
 
-        <section>
-          <h2>3. Toplanan Bilgiler ve Toplanma Amaçları</h2>
-          <p>Hizmetlerimizi kesintisiz sunabilmek amacıyla yalnızca zorunlu olan asgari düzeyde veri işlenir:</p>
-          
-          <h3>A. Hesap ve Yetkili Bilgileri</h3>
-          <ul>
-            <li><strong>İşletme Adı, Yetkili Ad-Soyad, E-posta Adresi ve İletişim Numarası:</strong> İşletme kaydı oluşturma, yönetici ve garson profillerini yapılandırma, lisans ve abonelik doğrulama amacıyla işlenir.</li>
-            <li><strong>Personel PIN Kodları:</strong> Cihaz üzerinde hızlı profil geçişi (Garson / Kasa) sağlamak amacıyla tek yönlü hash algoritmasıyla yerel cihazda tutulur.</li>
-          </ul>
+      <section>
+        <h2>4. Finansal ve Ödeme Bilgileri</h2>
+        <div class="alert alert-info">
+          <strong>Apple App Store Güvencesi:</strong> Gastrofy Pro abonelikleri doğrudan Apple In-App Purchase (Uygulama İçi Satın Alma) altyapısı üzerinden işlenir. Kredi kartı veya banka hesap bilgileriniz Gastrofy tarafından <strong>ASLA görüntülenemez, işlenemez veya saklanamaz</strong>. Tüm ödeme güvenliği Apple tarafından sağlanmaktadır.
+        </div>
+      </section>
 
-          <h3>B. Satın Alma ve Abonelik Verileri</h3>
-          <ul>
-            <li>Uygulama içi satın alımlar (Aylık Plan, Yıllık Plan) doğrudan <strong>Apple App Store (StoreKit)</strong> altyapısı üzerinden yürütülür.</li>
-            <li>Kredi kartı, banka kartı ve ödeme bilgileriniz doğrudan Apple tarafından güvenle işlenir; Gastrofy sunucuları kesinlikle kredi kartı numaralarınızı görmez ve saklamaz. Yalnızca Apple tarafından sağlanan dijital makbuz ve abonelik geçerlilik durumu doğrulanır.</li>
-          </ul>
+      <section>
+        <h2>5. Cihaz İzinleri ve Kullanım Gerekçeleri</h2>
+        <p>Uygulama yalnızca işlevselliği için gereken izinleri talep eder:</p>
+        <ul>
+          <li><strong>Kamera / Fotoğraf Galerisi:</strong> Menüye ürün görseli veya işletme logosu eklemek amacıyla kullanılır. Kamera izni yalnızca kullanıcı kendi isteğiyle görsel yüklemek istediğinde tetiklenir.</li>
+          <li><strong>Yerel Ağ (Local Network):</strong> Aynı Wi-Fi ağı üzerindeki diğer sipariş ve mutfak ekranlarıyla eşitleme yapmak için zorunludur.</li>
+        </ul>
+      </section>
 
-          <h3>C. Cihaz ve Teknik Veriler</h3>
-          <ul>
-            <li>Cihaz modeli, işletim sistemi sürümü ve yerel ağ IP adresi (Wi-Fi üzerinden kasa ve servis cihazlarının birbirini bulması ve sipariş senkronizasyonu için).</li>
-          </ul>
-        </section>
+      <section>
+        <h2>6. Sıfır İzleme (Zero Tracking) ve Üçüncü Taraflar</h2>
+        <p>
+          Gastrofy, kullanıcılarını üçüncü taraf web sitelerinde veya uygulamalarında <strong>ASLA izlemez</strong> (Apple App Tracking Transparency ilkeleri uyarınca izleme yapmaz). Verileriniz hiçbir reklam ağına veya veri simsarına satılmaz, kiralanmaz ve pazarlama amacıyla aktarılmaz.
+        </p>
+      </section>
 
-        <section>
-          <h2>4. Uygulama İzinleri ve Kullanım Gerekçeleri</h2>
-          <p>Gastrofy, işlevlerini yerine getirebilmek için iOS işletim sisteminden aşağıdaki izinleri talep eder. Bu izinlerin her biri kullanıcı şeffaflığıyla sınırlıdır:</p>
+      <section>
+        <h2>7. Veri Saklama ve Apple Uyumlu Hesap/Veri Silme Hakkı</h2>
+        <p>
+          Apple App Store İnceleme Kılavuzu Kuralı 5.1.1(v) ve KVKK m. 11 uyarınca, kullanıcılarımız tüm kişisel ve işletme verilerinin sunucularımızdan kalıcı olarak imha edilmesini talep etme hakkına sahiptir:
+        </p>
+        <ul>
+          <li>Uygulama içerisinden <strong>Ayarlar > Hesap & Şirket > Hesabımı Sil</strong> seçeneğini kullanarak hesabınızı silebilirsiniz.</li>
+          <li>Veya kayıtlı e-posta adresinizden <a href="mailto:destek@gastrofy.app">destek@gastrofy.app</a> adresine talepte bulunabilirsiniz. Talebiniz en geç 48 saat içinde işleme alınarak tüm kayıtlarınız silinir.</li>
+        </ul>
+      </section>
 
-          <div class="disclaimer-box">
-            <h4>📷 Kamera İzni (NSCameraUsageDescription)</h4>
-            <p>Masa QR kodlarını okutmak, servis personeli cihazlarını ana kasa terminaliyle eşleştirmek ve menü ürün fotoğrafları çekmek için kullanılır. Arka planda asla görüntü veya video kaydı alınmaz.</p>
-          </div>
-
-          <div class="disclaimer-box">
-            <h4>🖼️ Fotoğraf Galerisi İzni (NSPhotoLibraryUsageDescription & Add)</h4>
-            <p>Menüdeki yemek ve içeceklere görsel yüklemek ve oluşturulan gün sonu ciro/hesap raporlarını, makbuzları PDF/resim olarak galerinize kaydedebilmek için gereklidir.</p>
-          </div>
-
-          <div class="disclaimer-box">
-            <h4>🌐 Yerel Ağ İzni (NSLocalNetworkUsageDescription)</h4>
-            <p>İşletme içerisindeki kasa tableti ile servis personeli cihazlarının yerel Wi-Fi ağı üzerinden internete bağımlı olmaksızın anlık ve şifreli sipariş senkronizasyonu yapabilmesi için zorunludur.</p>
-          </div>
-
-          <div class="disclaimer-box">
-            <h4>📍 Konum İzni (NSLocationWhenInUseUsageDescription)</h4>
-            <p>Apple iOS güvenlik protokolleri gereğince, cihazın bağlı olduğu yerel Wi-Fi ağ adını (SSID) tespit etmek ve doğru yerel senkronizasyon ağına bağlı olduğunu doğrulamak için yalnızca kullanım sırasında talep edilir. Kesin GPS konumu takip edilmez veya saklanmaz.</p>
-          </div>
-        </section>
-
-        <section>
-          <h2>5. Reklam ve Takip Politikası (No Tracking)</h2>
-          <div class="disclaimer-box important">
-            <h4>🚫 Reklam ve Üçüncü Taraf Takibi Yoktur</h4>
-            <p>Gastrofy uygulamasında üçüncü taraf reklam ağları (AdMob, Meta Ads vb.) <strong>bulunmamaktadır</strong>. Kullanıcılarımızın uygulama içi hareketleri diğer şirketlerin uygulama veya web siteleriyle çapraz takip (IDFA / Tracking) edilmez.</p>
-          </div>
-        </section>
-
-        <section>
-          <h2>6. Veri Güvenliği ve Bulut Senkronizasyonu</h2>
-          <p>
-            Verileriniz endüstri standardı <strong>SSL/TLS (HTTPS)</strong> ve 256-bit AES şifreleme protokolleriyle korunur. Çevrimdışı çalışabilen mimarimiz sayesinde internet bağlantınız kopsa dahi işletmeniz çalışmaya devam eder; bağlantı sağlandığında yetkilendirilmiş bulut veritabanıyla (Google Firebase) senkronize edilir.
-          </p>
-        </section>
-
-        <section>
-          <h2>7. Kullanıcı Hakları ve Veri Silme Talebi (Data Deletion)</h2>
-          <p>
-            KVKK'nın 11. maddesi ve GDPR uyarınca kullanıcılarımız şu haklara sahiptir:
-          </p>
-          <ul>
-            <li>Verilerinin işlenip işlenmediğini öğrenme ve bilgi talep etme,</li>
-            <li>Eksik veya yanlış işlenmiş verilerin düzeltilmesini isteme,</li>
-            <li>Verilerinin silinmesini veya yok edilmesini isteme.</li>
-          </ul>
-          <p>
-            <strong>Hesap ve Veri Silme:</strong> Uygulama içerisindeki Giriş ekranında yer alan <em>"Bu cihazdaki hesapları sıfırla"</em> seçeneğiyle yerel verilerinizi anında silebilirsiniz. Bulutta kayıtlı işletme hesabınızın ve tüm ilişkili verilerin kalıcı olarak silinmesi için <a href="mailto:destek@gastrofy.app">destek@gastrofy.app</a> adresine talepte bulunabilirsiniz. Talepler en geç 7 iş günü içerisinde sonuçlandırılır.
-          </p>
-        </section>
-
-        <section>
-          <h2>8. Değişiklikler ve İletişim</h2>
-          <p>
-            Bu Gizlilik Politikası, yasal mevzuata veya uygulama güncellemelerine bağlı olarak güncellenebilir. Değişiklikler bu sayfada yayımlandığı andan itibaren geçerlilik kazanır.
-          </p>
-          <div class="contact-card">
-            <div>
-              <h3>Herhangi bir sorunuz mu var?</h3>
-              <p>Gizlilik süreçlerimiz ve veri koruma haklarınız hakkında detaylı bilgi için bize dilediğiniz an ulaşabilirsiniz.</p>
-              <p><strong>E-posta:</strong> <a href="mailto:destek@gastrofy.app">destek@gastrofy.app</a></p>
-            </div>
-          </div>
-        </section>
-
-      </div>
     </div>
   </main>
 
-  <!-- FOOTER -->
-  <footer>
-    <div class="container footer-wrapper">
-      <div>© 2026 Gastrofy. Tüm hakları saklıdır.</div>
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container footer-content">
+      <div class="footer-left">
+        <img src="gastrofy.png" alt="Gastrofy" class="brand-logo-small">
+        <span>© 2026 Gastrofy. Tüm Hakları Saklıdır.</span>
+      </div>
       <div class="footer-links">
         <a href="index.html">Ana Sayfa</a>
         <a href="terms.html">Kullanım Koşulları</a>
-        <a href="privacy.html">Gizlilik Politikası</a>
         <a href="support.html">Destek</a>
       </div>
     </div>

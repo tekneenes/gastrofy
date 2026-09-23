@@ -2,9 +2,9 @@
 <html lang="tr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
   <title>Gastrofy - Akıllı Restoran ve Masa Yönetim Sistemi</title>
-  <meta name="description" content="Gastrofy, restoran ve kafeler için tasarlanmış yeni nesil akıllı masa takibi, adisyon yönetimi, yerel ağ senkronizasyonu ve yapay zeka destekli operasyon platformudur.">
+  <meta name="description" content="Gastrofy, restoran ve kafeler için yeni nesil akıllı masa takibi, adisyon yönetimi, yerel ağ senkronizasyonu ve yapay zeka operasyon platformudur.">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" type="image/png" href="gastrofy.png">
 </head>
@@ -13,15 +13,18 @@
   <!-- Navigation -->
   <nav class="navbar">
     <div class="container nav-container">
-      <a href="index.html" class="nav-brand">
-        <img src="gastrofy.png" alt="Gastrofy Logo" class="brand-logo">
-        <span class="brand-text">Gastrofy</span>
-      </a>
+      <div class="nav-top-row">
+        <a href="index.html" class="nav-brand">
+          <img src="gastrofy.png" alt="Gastrofy" class="brand-logo">
+          <span class="brand-text">Gastrofy</span>
+        </a>
+        <a href="support.html" class="nav-btn">Destek</a>
+      </div>
       <div class="nav-links">
+        <a href="index.html" class="active">Ana Sayfa</a>
         <a href="#features">Özellikler</a>
         <a href="privacy.html">Gizlilik</a>
         <a href="terms.html">Kullanım Koşulları</a>
-        <a href="support.html" class="nav-btn">Destek Al</a>
       </div>
     </div>
   </nav>
@@ -29,82 +32,85 @@
   <!-- Hero Section -->
   <header class="hero">
     <div class="container hero-content">
-      <div class="badge">🚀 Yeni Nesil Restoran Teknolojisi</div>
-      <h1 class="hero-title">Restoranınızı Akıllı Masa ve Yapay Zeka ile Yönetin</h1>
+      <div class="badge">✨ iPad & Mac İçin Tasarlandı</div>
+      <h1 class="hero-title">Restoranınızı <span class="gradient-text">Akıllı Masa & AI</span> ile Yönetin</h1>
       <p class="hero-subtitle">
-        Gastrofy; siparişten adisyona, mutfak entegrasyonundan yapay zeka destekli masa zekasına kadar tüm restoran operasyonlarınızı tek bir şık ve hızlı arayüzde birleştirir.
+        Gastrofy; siparişten adisyona, mutfak entegrasyonundan yapay zeka destekli masa zekasına kadar tüm restoran operasyonlarınızı tek bir şık ve ultra hızlı arayüzde birleştirir.
       </p>
       <div class="hero-actions">
-        <a href="#features" class="btn btn-primary">Özellikleri Keşfedin</a>
+        <a href="#features" class="btn btn-primary">Özellikleri Keşfet</a>
         <a href="support.html" class="btn btn-secondary">Yardım & İletişim</a>
       </div>
     </div>
   </header>
 
-  <!-- Features Grid -->
-  <section id="features" class="container features-section">
-    <div class="section-header">
-      <h2 class="section-title">İşletmenizi Bir Adım Öne Taşıyın</h2>
-      <p class="section-desc">Gastrofy, hem iPad hem de Mac üzerinde kesintisiz çalışarak garson ve kasa süreçlerini sıfır gecikmeyle yönetir.</p>
-    </div>
-
-    <div class="grid grid-3">
-      <div class="card">
-        <div class="card-icon">🪑</div>
-        <h3 class="card-title">Dinamik Masa & Kat Planı</h3>
-        <p class="card-desc">Salon, Bahçe, Teras veya VIP alanlarınızı istediğiniz gibi özelleştirin. Masaların doluluk süresini, adisyon tutarını ve son işlem zamanını anlık renk kodlarıyla takip edin.</p>
+  <!-- Main Content -->
+  <main>
+    <!-- Features Grid -->
+    <section id="features" class="container features-section">
+      <div class="section-header">
+        <h2 class="section-title">İşletmenizi Bir Adım Öne Taşıyın</h2>
+        <p class="section-desc">Gastrofy, iPad ve Mac cihazlarınızda sıfır gecikmeyle çalışarak sipariş ve kasa karmaşasını ortadan kaldırır.</p>
       </div>
 
-      <div class="card">
-        <div class="card-icon">⚡</div>
-        <h3 class="card-title">Yerel Ağ (LAN) Eşitleme</h3>
-        <p class="card-desc">İnternet bağlantınız kopsa bile yerel Wi-Fi üzerinden tüm cihazlarınız birbiriyle konuşur. Kesintisiz sipariş akışı ve sıfır veri kaybı güvencesi.</p>
-      </div>
+      <div class="grid grid-3">
+        <div class="card">
+          <div class="card-icon">🪑</div>
+          <h3 class="card-title">Dinamik Masa & Kat Planı</h3>
+          <p class="card-desc">Salon, Bahçe, Teras veya VIP alanlarınızı istediğiniz gibi özelleştirin. Masaların doluluk süresini ve adisyon tutarını renk kodlarıyla anlık takip edin.</p>
+        </div>
 
-      <div class="card">
-        <div class="card-icon">🧠</div>
-        <h3 class="card-title">Table Intelligence (AI)</h3>
-        <p class="card-desc">Yapay zeka asistanı geçmiş sipariş verilerini analiz eder; yoğun saat tahminleri, masa devir süresi optimizasyonları ve karlı ürün önerileri sunar.</p>
-      </div>
+        <div class="card">
+          <div class="card-icon">⚡</div>
+          <h3 class="card-title">Yerel Ağ (LAN) Eşitleme</h3>
+          <p class="card-desc">İnternet bağlantınız kopsa dahi yerel Wi-Fi ağı üzerinden garson ve mutfak cihazlarınız kesintisiz iletişimde kalır. Sıfır veri kaybı güvencesi.</p>
+        </div>
 
-      <div class="card">
-        <div class="card-icon">🧾</div>
-        <h3 class="card-title">Hızlı Sipariş & Parçalı Ödeme</h3>
-        <p class="card-desc">Ürün varyantları, porsiyon seçenekleri ve sipariş notları tek dokunuşla eklenir. Masayı bölme, adisyon birleştirme ve nakit/kart parçalı tahsilat desteği.</p>
-      </div>
+        <div class="card">
+          <div class="card-icon">🧠</div>
+          <h3 class="card-title">Table Intelligence (AI)</h3>
+          <p class="card-desc">Gelişmiş yapay zeka asistanı geçmiş sipariş verilerini analiz eder; yoğun saat tahminleri, masa devir süresi ve karlı ürün önerileri sunar.</p>
+        </div>
 
-      <div class="card">
-        <div class="card-icon">📊</div>
-        <h3 class="card-title">Gelişmiş Gelir Raporları</h3>
-        <p class="card-desc">Gün sonu Z raporu simülasyonları, en çok satan lezzetler, saatlik ciro dağılımı ve garson performansı analitik paneliyle anında elinizin altında.</p>
-      </div>
+        <div class="card">
+          <div class="card-icon">🧾</div>
+          <h3 class="card-title">Hızlı Sipariş & Parçalı Ödeme</h3>
+          <p class="card-desc">Ürün varyantları, porsiyon seçenekleri ve sipariş notları tek dokunuşla eklenir. Masayı bölme, adisyon birleştirme ve nakit/kart tahsilat desteği.</p>
+        </div>
 
-      <div class="card">
-        <div class="card-icon">🔒</div>
-        <h3 class="card-title">Güvenli & KVKK Uyumlu</h3>
-        <p class="card-desc">İşletme ve müşteri verileriniz şifreli yerel veritabanında saklanır. Gereksiz üçüncü taraf reklam takipçisi barındırmaz, maksimum gizlilik sunar.</p>
-      </div>
-    </div>
-  </section>
+        <div class="card">
+          <div class="card-icon">📊</div>
+          <h3 class="card-title">Gelir & Ciro Raporları</h3>
+          <p class="card-desc">Gün sonu Z raporu simülasyonları, en çok satan lezzetler, saatlik ciro dağılımı ve personel performansı analitik paneliyle elinizin altında.</p>
+        </div>
 
-  <!-- Legal & Disclaimer Highlights -->
-  <section class="container legal-highlight-section">
-    <div class="alert alert-warning">
-      <strong>Önemli Yasal Bilgilendirme:</strong> Gastrofy bir işletme içi masa, adisyon ve operasyon yönetim asistanıdır. 3100 sayılı kanun kapsamında resmi bir Ödeme Kaydedici Cihaz (ÖKC) veya mali e-fatura entegratörü değildir. Yasal mali fiş ve faturalandırma yükümlülükleri işletme sahibine aittir. Detaylar için <a href="terms.html">Kullanım Koşulları</a> sayfamızı inceleyebilirsiniz.
-    </div>
-  </section>
+        <div class="card">
+          <div class="card-icon">🔒</div>
+          <h3 class="card-title">Güvenli & KVKK Uyumlu</h3>
+          <p class="card-desc">İşletme ve müşteri verileriniz şifreli yerel veritabanında saklanır. Üçüncü taraf reklam izleyicisi barındırmaz, maksimum gizlilik sunar.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Legal & Disclaimer Box -->
+    <section class="container">
+      <div class="alert alert-warning">
+        <strong>Önemli Yasal Bilgilendirme:</strong> Gastrofy bir işletme içi masa, adisyon ve operasyon yönetim asistanıdır. 3100 sayılı kanun kapsamında resmi bir Ödeme Kaydedici Cihaz (ÖKC) veya mali e-fatura entegratörü değildir. Yasal mali fiş ve faturalandırma yükümlülükleri işletme sahibine aittir. Detaylar için <a href="terms.html">Kullanım Koşulları</a> sayfamızı inceleyebilirsiniz.
+      </div>
+    </section>
+  </main>
 
   <!-- Footer -->
   <footer class="footer">
     <div class="container footer-content">
       <div class="footer-left">
-        <img src="gastrofy.png" alt="Gastrofy Logo" class="brand-logo-small">
+        <img src="gastrofy.png" alt="Gastrofy" class="brand-logo-small">
         <span>© 2026 Gastrofy. Tüm Hakları Saklıdır.</span>
       </div>
       <div class="footer-links">
         <a href="privacy.html">Gizlilik Politikası</a>
         <a href="terms.html">Kullanım Koşulları & EULA</a>
-        <a href="support.html">Teknik Destek & İletişim</a>
+        <a href="support.html">Teknik Destek</a>
       </div>
     </div>
   </footer>
