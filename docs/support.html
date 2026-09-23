@@ -2,9 +2,9 @@
 <html lang="tr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Teknik Destek & Yardım Merkezi - Gastrofy</title>
-  <meta name="description" content="Gastrofy kullanıcıları için teknik destek, sıkça sorulan sorular, abonelik yardımı ve hesap/veri silme talepleri.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>Teknik Destek & Yardım - Gastrofy</title>
+  <meta name="description" content="Gastrofy kullanıcıları için teknik destek, sıkça sorulan sorular, abonelik yardımı ve veri silme talepleri.">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" type="image/png" href="gastrofy.png">
 </head>
@@ -13,108 +13,114 @@
   <!-- Navigation -->
   <nav class="navbar">
     <div class="container nav-container">
-      <a href="index.html" class="nav-brand">
-        <img src="gastrofy.png" alt="Gastrofy Logo" class="brand-logo">
-        <span class="brand-text">Gastrofy Destek</span>
-      </a>
+      <div class="nav-top-row">
+        <a href="index.html" class="nav-brand">
+          <img src="gastrofy.png" alt="Gastrofy" class="brand-logo">
+          <span class="brand-text">Gastrofy Destek</span>
+        </a>
+        <a href="mailto:destek@gastrofy.app" class="nav-btn">E-posta Gönder</a>
+      </div>
       <div class="nav-links">
         <a href="index.html">Ana Sayfa</a>
         <a href="privacy.html">Gizlilik Politikası</a>
         <a href="terms.html">Kullanım Koşulları</a>
+        <a href="support.html" class="active">Destek</a>
       </div>
     </div>
   </nav>
 
-  <!-- Support Header -->
+  <!-- Header -->
   <header class="page-header">
-    <div class="container text-center">
-      <div class="badge">Yardım & Çözüm Merkezi</div>
+    <div class="container">
+      <div class="badge">💬 Müşteri & Teknik Destek</div>
       <h1>Size Nasıl Yardımcı Olabiliriz?</h1>
       <p class="subtitle">Gastrofy ile ilgili teknik sorularınız, özellik talepleriniz veya hesap işlemleriniz için buradayız.</p>
     </div>
   </header>
 
-  <main class="container support-container">
+  <!-- Main Content -->
+  <main class="container">
     
-    <!-- Contact Cards Grid -->
-    <div class="grid grid-2 mb-8">
+    <!-- Quick Contact Cards -->
+    <div class="grid grid-2" style="margin-bottom: 32px;">
       <div class="card">
         <div class="card-icon">✉️</div>
         <h3 class="card-title">E-posta ile İletişim</h3>
-        <p class="card-desc">Her türlü teknik aksaklık, iş birliği veya genel soru için destek ekibimize doğrudan yazabilirsiniz. Genellikle 24 saat içinde yanıt verilir.</p>
-        <p class="mt-4"><a href="mailto:destek@gastrofy.app" class="contact-email">destek@gastrofy.app</a></p>
+        <p class="card-desc">Her türlü teknik aksaklık, kurulum desteği veya iş birliği için doğrudan destek ekibimize yazabilirsiniz. Talepleriniz 24 saat içinde yanıtlanır.</p>
+        <p style="margin-top: 16px;">
+          <a href="mailto:destek@gastrofy.app" class="contact-email">destek@gastrofy.app</a>
+        </p>
       </div>
 
       <div class="card">
         <div class="card-icon">🗑️</div>
         <h3 class="card-title">Hesap & Veri Silme Talebi</h3>
-        <p class="card-desc">Apple App Store ve KVKK yönergeleri uyarınca dilediğiniz an hesap ve işletme verilerinizin kalıcı olarak silinmesini talep edebilirsiniz.</p>
-        <p class="mt-4"><a href="#data-deletion" class="btn btn-secondary">Silme Talimatları</a></p>
+        <p class="card-desc">Apple App Store ve KVKK yönergeleri uyarınca işletme ve hesap verilerinizin kalıcı olarak silinmesini dilediğiniz an talep edebilirsiniz.</p>
+        <p style="margin-top: 16px;">
+          <a href="#data-deletion" class="btn btn-secondary" style="font-size: 13.5px; padding: 8px 16px;">Silme Talimatları</a>
+        </p>
       </div>
     </div>
 
-    <!-- FAQ Section -->
-    <section class="support-section">
-      <h2 class="section-title">Sıkça Sorulan Sorular (S.S.S)</h2>
+    <div class="legal-content">
 
-      <div class="faq-item">
-        <h3>1. İnternet bağlantım koptuğunda Gastrofy çalışmaya devam eder mi?</h3>
-        <p>Evet! Gastrofy "Local-First" (Önce Yerel Veri) mimarisiyle geliştirilmiştir. İnternetiniz olmasa bile yerel Wi-Fi ağınız üzerinden masaları görebilir, sipariş alabilir ve adisyon kapatabilirsiniz. İnternet geri geldiğinde bulut yedekleme otomatik olarak devam eder.</p>
-      </div>
+      <!-- FAQ Section -->
+      <section class="support-section">
+        <h2>Sıkça Sorulan Sorular (S.S.S)</h2>
 
-      <div class="faq-item">
-        <h3>2. Satın aldığım Pro / Table Intelligence aboneliğini yeni bir cihaza nasıl aktarırım?</h3>
-        <p>Uygulama içerisindeki <strong>Ayarlar</strong> menüsünden veya <strong>Planınızı Yükseltin</strong> sayfasından <em>"Satın Almaları Geri Yükle" (Restore Purchases)</em> butonuna tıklamanız yeterlidir. Aboneliğiniz Apple Kimliğinize tanımlıdır ve anında aktif olacaktır.</p>
-      </div>
+        <div class="faq-item">
+          <h3>1. İnternet bağlantım koptuğunda Gastrofy çalışmaya devam eder mi?</h3>
+          <p>Evet! Gastrofy "Local-First" (Önce Yerel Veri) mimarisiyle geliştirilmiştir. İnternetiniz olmasa bile yerel Wi-Fi ağınız üzerinden masaları görebilir, sipariş alabilir ve adisyon kapatabilirsiniz. İnternet geri geldiğinde bulut eşitlemesi otomatik devam eder.</p>
+        </div>
 
-      <div class="faq-item">
-        <h3>3. Gastrofy resmi bir mali yazarkasa (ÖKC) yerine geçer mi?</h3>
-        <p>Hayır. Gastrofy bir iç operasyon, adisyon, masa ve ciro analiz yönetim yazılımıdır. Maliye Bakanlığı onaylı bir mali yazarkasa (ÖKC) donanımı değildir. Yasal mali fiş ve e-fatura kesme yükümlülüğünüz devam etmektedir.</p>
-      </div>
+        <div class="faq-item">
+          <h3>2. Satın aldığım Pro aboneliği yeni bir cihaza nasıl aktarırım?</h3>
+          <p>Uygulama içerisindeki <strong>Ayarlar</strong> menüsünden veya <strong>Planınızı Yükseltin</strong> sayfasından <em>"Satın Almaları Geri Yükle" (Restore Purchases)</em> butonuna dokunmanız yeterlidir. Aboneliğiniz Apple Kimliğinize tanımlıdır ve anında aktif olacaktır.</p>
+        </div>
 
-      <div class="faq-item">
-        <h3>4. Gastrofy hangi Apple cihazlarını destekler?</h3>
-        <p>Gastrofy; iPadOS (iPad Pro, iPad Air, iPad Mini ve standart iPad modelleri) ve macOS (Apple Silicon M1/M2/M3 ve Intel tabanlı Mac bilgisayarlar) üzerinde optimize edilmiş olarak çalışır.</p>
-      </div>
+        <div class="faq-item">
+          <h3>3. Gastrofy resmi bir mali yazarkasa (ÖKC) yerine geçer mi?</h3>
+          <p>Hayır. Gastrofy bir iç operasyon, adisyon, masa ve ciro analiz yönetim yazılımıdır. Maliye Bakanlığı onaylı bir mali yazarkasa (ÖKC) donanımı değildir. Yasal mali fiş ve e-fatura kesme yükümlülüğünüz devam etmektedir.</p>
+        </div>
 
-      <div class="faq-item">
-        <h3>5. Aboneliğimi nasıl iptal edebilir veya planımı nasıl değiştirebilirim?</h3>
-        <p>Abonelikleriniz doğrudan Apple ID hesabınız tarafından yönetilir. İptal işlemi için:</p>
-        <ol>
-          <li>iPad veya iPhone'unuzda <strong>Ayarlar</strong> uygulamasını açın.</li>
-          <li>En üstteki <strong>[Adınız] / Apple Kimliği</strong> sekmesine dokunun.</li>
-          <li><strong>Abonelikler</strong> bölümüne girin.</li>
-          <li><strong>Gastrofy</strong> aboneliğini seçip <em>"Aboneliği İptal Et"</em> seçeneğini işaretleyin.</li>
-        </ol>
-      </div>
-    </section>
+        <div class="faq-item">
+          <h3>4. Gastrofy hangi Apple cihazlarını destekler?</h3>
+          <p>Gastrofy; iPadOS (iPad Pro, iPad Air, iPad Mini ve standart iPad modelleri) ve macOS (Apple Silicon M1/M2/M3 ve Intel tabanlı Mac bilgisayarlar) üzerinde optimize edilmiş olarak çalışır.</p>
+        </div>
 
-    <!-- Account / Data Deletion Section -->
-    <section id="data-deletion" class="support-section">
-      <h2 class="section-title">Hesap ve Veri Silme Prosedürü</h2>
-      <div class="alert alert-info">
-        <strong>Apple App Store Kuralı (Guideline 5.1.1(v)) Uyarınca:</strong> Kullanıcılarımız tüm kişisel ve işletme verilerinin sunucularımızdan geri döndürülemez biçimde silinmesini talep etme hakkına sahiptir.
-      </div>
-      <p>Hesabınızı ve işletme geçmişinizi kalıcı olarak silmek için:</p>
-      <ul>
-        <li>Uygulama içerisinden: <strong>Ayarlar > Profil & İşletme > Hesabımı Kalıcı Olarak Sil</strong> butonunu kullanabilirsiniz.</li>
-        <li>E-posta yoluyla: Kayıtlı e-posta adresinizden <a href="mailto:destek@gastrofy.app?subject=Hesap%20Silme%20Talebi">destek@gastrofy.app</a> adresine <code>"Hesap ve Veri Silme Talebi"</code> konulu bir e-posta gönderebilirsiniz. Talebiniz en geç 48 saat içinde işleme alınacak ve tüm verileriniz sunucularımızdan kalıcı olarak imha edilecektir.</li>
-      </ul>
-    </section>
+        <div class="faq-item">
+          <h3>5. Aboneliğimi nasıl iptal edebilirim?</h3>
+          <p>Abonelikleriniz doğrudan Apple ID hesabınız tarafından yönetilir. İptal işlemi için iPad veya iPhone'unuzda <strong>Ayarlar > Apple Kimliği > Abonelikler > Gastrofy > Aboneliği İptal Et</strong> adımlarını takip edebilirsiniz.</p>
+        </div>
+      </section>
 
+      <!-- Account Deletion Section -->
+      <section id="data-deletion" class="support-section">
+        <h2>Hesap ve Veri Silme Prosedürü</h2>
+        <div class="alert alert-info">
+          <strong>Apple App Store Kuralı (Guideline 5.1.1(v)) Uyarınca:</strong> Kullanıcılarımız tüm kişisel ve işletme verilerinin sunucularımızdan geri döndürülemez biçimde silinmesini talep etme hakkına sahiptir.
+        </div>
+        <p>Hesabınızı ve işletme geçmişinizi kalıcı olarak silmek için:</p>
+        <ul>
+          <li><strong>Uygulama içerisinden:</strong> <em>Ayarlar > Şirket / Profil > Hesabımı Kalıcı Olarak Sil</em> butonuna dokunabilirsiniz.</li>
+          <li><strong>E-posta yoluyla:</strong> Kayıtlı e-posta adresinizden <a href="mailto:destek@gastrofy.app?subject=Hesap%20Silme%20Talebi">destek@gastrofy.app</a> adresine <code>"Hesap ve Veri Silme Talebi"</code> konulu bir e-posta iletmeniz yeterlidir. Talebiniz en geç 48 saat içinde sonuçlandırılır.</li>
+        </ul>
+      </section>
+
+    </div>
   </main>
 
   <!-- Footer -->
   <footer class="footer">
     <div class="container footer-content">
       <div class="footer-left">
-        <img src="gastrofy.png" alt="Gastrofy Logo" class="brand-logo-small">
+        <img src="gastrofy.png" alt="Gastrofy" class="brand-logo-small">
         <span>© 2026 Gastrofy. Tüm Hakları Saklıdır.</span>
       </div>
       <div class="footer-links">
         <a href="index.html">Ana Sayfa</a>
         <a href="privacy.html">Gizlilik Politikası</a>
-        <a href="terms.html">Kullanım Koşulları & EULA</a>
+        <a href="terms.html">Kullanım Koşulları</a>
         <a href="support.html">Destek</a>
       </div>
     </div>
