@@ -124,15 +124,15 @@ Gastrofy ile işletmenizin kontrolünü elinize alın, karmaşık sistemlerden k
 adisyon,pos sistemi,restoran,masa takip,kafe,sipariş,kasa,menü,gastrofy,hesap,veresiye
 ```
 
-### Bağlantılar (URLs)
-* **Destek URL (Support URL):** `https://gastrofy.app/destek` *(veya web siteniz / e-postanız)*
-* **Pazarlama URL (Marketing URL):** `https://gastrofy.app`
-* **Gizlilik Politikası URL (Privacy Policy URL):** `https://gastrofy.app/gizlilik` *(Zorunludur)*
-* **Kullanım Koşulları (EULA):** Apple Standart EULA veya `https://gastrofy.app/kullanim-kosullari`
+### Bağlantılar (Gerçek GitHub Pages Canlı Bağlantıları)
+* **Destek URL (Support URL):** `https://tekneenes.github.io/gastrofy/support.html`
+* **Pazarlama URL (Marketing URL):** `https://tekneenes.github.io/gastrofy/`
+* **Gizlilik Politikası URL (Privacy Policy URL):** `https://tekneenes.github.io/gastrofy/privacy.html` *(App Store Zorunlu)*
+* **Kullanım Koşulları (EULA):** `https://tekneenes.github.io/gastrofy/terms.html` *(Abonelikler için Zorunlu)*
 
 ### Telif Hakkı (Copyright)
 ```text
-2025 Gastrofy
+© 2026 Gastrofy. Tüm Hakları Saklıdır.
 ```
 
 ---
