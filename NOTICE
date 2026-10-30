@@ -1,0 +1,15 @@
+Gastrofy (GastroMind) — Enterprise Cloud POS, Table Management & Restaurant Intelligence Ecosystem
+Copyright 2026 Muhammed Enes Tekne (https://github.com/tekneenes)
+
+This product includes software developed by Muhammed Enes Tekne and
+the open-source community.
+
+Third-Party Components & Libraries:
+- Flutter Framework (Google LLC - BSD 3-Clause License)
+- Firebase SDKs & Cloud Firestore (Google LLC - Apache License 2.0)
+- sqflite & sqflite_common_ffi (Alexandre Roux - MIT License)
+- Google Gemini SDK (Google LLC - Apache License 2.0)
+- Shelf & Shelf Router (Dart Team / Google LLC - BSD 3-Clause License)
+- fl_chart (Iman Khoshabi - MIT License)
+- Syncfusion Flutter PDF Viewer (Syncfusion, Inc.)
+- pdf & printing (David PHAM-VAN - Apache License 2.0)
