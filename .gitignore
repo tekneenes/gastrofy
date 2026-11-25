@@ -48,6 +48,9 @@ app.*.map.json
 local.properties
 
 # Secrets & sensitive service keys
+.env
+.env.*
+!.env.example
 *-firebase-adminsdk-*.json
 za.json
 

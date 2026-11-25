@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../gastroqr_firebase_options.dart'; // EKLENDİ
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:convert';
 
 class FirebaseService {
@@ -435,7 +436,11 @@ Bu sözleşmeden doğabilecek her türlü uyuşmazlıkta Türk Hukuku uygulanır
   /// Ürün resmini ImgBB'ye yükler ve URL'i döndürür.
   Future<String?> uploadProductImage(String companyEmail, String productId, File imageFile) async {
     try {
-      const String apiKey = "***REMOVED***";
+      final String apiKey = dotenv.isInitialized ? (dotenv.env['IMGBB_API_KEY'] ?? '') : '';
+      if (apiKey.isEmpty) {
+        debugPrint("ImgBB API key is missing in .env (IMGBB_API_KEY)");
+        return null;
+      }
       final Uri uri = Uri.parse("https://api.imgbb.com/1/upload?key=$apiKey");
       
       debugPrint("ImgBB Yükleme Başlıyor: ${imageFile.path}");
